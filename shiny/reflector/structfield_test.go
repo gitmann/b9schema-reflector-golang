@@ -72,7 +72,7 @@ func TestNewStructFieldTag(t *testing.T) {
 func TestParseTags(t *testing.T) {
 	testCases := []struct {
 		name     string
-		tag      string
+		tag      reflect.StructTag
 		wantTags map[string]*StructFieldTag
 	}{
 		{
