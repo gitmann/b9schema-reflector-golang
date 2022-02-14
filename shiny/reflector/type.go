@@ -2,7 +2,7 @@ package reflector
 
 import (
 	"fmt"
-	"github.com/gitmann/shiny-reflector-golang/shiny/util"
+	"github.com/gitmann/shiny-reflector-golang/v2/shiny/util"
 	"reflect"
 	"sort"
 )
