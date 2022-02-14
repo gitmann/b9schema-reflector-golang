@@ -7,8 +7,8 @@ import (
 	"sort"
 )
 
-func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeList, v reflect.Value, s *reflect.StructField) TypeList {
-	currentElem := NewTypeElement(r.nextID(), parentID, name)
+func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList, v reflect.Value, s *reflect.StructField) TypeList {
+	currentElem := NewTypeElement(r.nextID(), parentID, name, r.Label)
 
 	// Append current element to master type list.
 	typeList = append(typeList, currentElem)
@@ -32,18 +32,40 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 	}
 
 	// Capture native features from type.
-	currentElem = r.reflectTypeImpl(v.Type(), currentElem)
+	currentElem = r.reflectGolangType(v.Type(), currentElem)
 
 	native["IsZero"] = util.ValueIfTrue(v.IsZero(), "z", "-")
 	native["IsValid"] = util.ValueIfTrue(v.IsValid(), "v", "-")
 	native["IsNil"] = "-"
 
-	// Handle un-exported fields.
+	// Handle un-exported struct fields.
 	var vValue interface{}
 	if s != nil && s.PkgPath != "" {
 		native["PkgPath"] = s.PkgPath
 	} else {
 		vValue = v.Interface()
+	}
+
+	// Parse struct tags.
+	if s != nil {
+		tags := ParseTags(s.Tag)
+		if len(tags) > 0 {
+			for tagName, tagVal := range tags {
+				tagMap := tagVal.AsMap()
+				if tagMap != nil {
+					tempNative := currentElem.Native[tagName]
+					if tempNative == nil {
+						// Set new native block.
+						currentElem.Native[tagName] = tagMap
+					} else {
+						// Copy from tagMap into existing block.
+						for k, v := range tagMap {
+							tempNative[k] = v
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// TODO: ignore vValue for now
@@ -74,7 +96,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 			// Non-Zero interface is just an extra layer of abstraction around a real type.
 			// Remove interface from typeList and reflect child element.
 			typeList = typeList[:len(typeList)-1]
-			typeList = r.reflectValueImpl(parentID, name, typeList, v.Elem(), nil)
+			typeList = r.reflectTypeImpl(parentID, name, typeList, v.Elem(), nil)
 		}
 
 	// Pointer is an intermediate type that has no value and points to one child.
@@ -91,7 +113,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 			// Use existing value for valid pointer.
 			targetValue = v.Elem()
 		}
-		refList = r.reflectValueImpl(currentElem.ID, "", refList, targetValue, nil)
+		refList = r.reflectTypeImpl(currentElem.ID, "", refList, targetValue, nil)
 
 	// Array and Slice represent lists of elements.
 	// - 1st element of list will be used to determine element type
@@ -106,7 +128,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 		} else {
 			targetValue = reflect.New(v.Type().Elem()).Elem()
 		}
-		refList = r.reflectValueImpl(currentElem.ID, "", refList, targetValue, nil)
+		refList = r.reflectTypeImpl(currentElem.ID, "", refList, targetValue, nil)
 
 	case reflect.Slice:
 		currentElem.Type = "list"
@@ -120,7 +142,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 			sliceElem = v.Index(0)
 		}
 
-		refList = r.reflectValueImpl(currentElem.ID, "", refList, sliceElem, nil)
+		refList = r.reflectTypeImpl(currentElem.ID, "", refList, sliceElem, nil)
 
 	// Struct and Map represent key-value pairs.
 	// - Struct keys are field names which are always strings.
@@ -132,7 +154,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 			structField := v.Type().Field(i)
 			targetValue := v.Field(i)
 
-			refList = r.reflectValueImpl(currentElem.ID, structField.Name, refList, targetValue, &structField)
+			refList = r.reflectTypeImpl(currentElem.ID, structField.Name, refList, targetValue, &structField)
 		}
 
 	case reflect.Map:
@@ -168,7 +190,7 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 			mapKeyName := k.Name
 			mapValue := v.MapIndex(k.Value)
 
-			refList = r.reflectValueImpl(currentElem.ID, mapKeyName, refList, mapValue, nil)
+			refList = r.reflectTypeImpl(currentElem.ID, mapKeyName, refList, mapValue, nil)
 		}
 
 	default:
@@ -187,10 +209,11 @@ func (r *Reflector) reflectValueImpl(parentID int, name string, typeList TypeLis
 	return typeList
 }
 
-func (r *Reflector) reflectTypeImpl(t reflect.Type, currentElem *TypeElement) *TypeElement {
+// reflectGolangType parses native features for Go.
+func (r *Reflector) reflectGolangType(t reflect.Type, currentElem *TypeElement) *TypeElement {
 	// Initialize nil variables.
 	if currentElem == nil {
-		currentElem = NewTypeElement(0, 0, "")
+		currentElem = NewTypeElement(0, 0, "", "")
 	}
 
 	native := currentElem.Native["golang"]

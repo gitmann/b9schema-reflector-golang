@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	PRINT_NATIVE = false
+	PRINT_NATIVE = true
 )
 
 // TypeElement holds type information about an element.
@@ -23,6 +23,9 @@ type TypeElement struct {
 	// - Name applies to struct/map types with string keys.
 	Name        string
 	Description string
+
+	// Label is an optional label for a block of elements.
+	Label string
 
 	// Generic type of element.
 	Type string
@@ -41,11 +44,12 @@ type TypeElement struct {
 	Err error
 }
 
-func NewTypeElement(ID, ParentID int, name string) *TypeElement {
+func NewTypeElement(ID, ParentID int, name, label string) *TypeElement {
 	return &TypeElement{
 		ID:       ID,
 		ParentID: ParentID,
 		Name:     name,
+		Label:    label,
 		Native:   make(map[string]NativeType),
 	}
 }
@@ -137,6 +141,9 @@ func (t *TypeResult) SortedTypeNames() []string {
 
 // Reflector provides functions to build type and values from a Go value.
 type Reflector struct {
+	// Label is an optional label for a block of elements.
+	Label string
+
 	// Keep track of the last ID assigned.
 	lastID int
 
@@ -179,7 +186,7 @@ func (r *Reflector) ReflectTypes(x interface{}) *TypeResult {
 	parentID := 0
 
 	// Start recursive reflection.
-	r.typeResult.Types = r.reflectValueImpl(parentID, "", r.typeResult.Types, reflect.ValueOf(x), nil)
+	r.typeResult.Types = r.reflectTypeImpl(parentID, "", r.typeResult.Types, reflect.ValueOf(x), nil)
 
 	return r.typeResult
 }
