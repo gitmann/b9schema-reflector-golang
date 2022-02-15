@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/gitmann/shiny-reflector-golang/shiny/util"
 )
@@ -101,6 +102,33 @@ func (t *TypeElement) SetAlias(lang, alias string) {
 //
 // Implementation specifics are output on multiple, indented lines in JSON format.
 func (t *TypeElement) String() string {
+	return t.BuildString("")
+}
+
+// IsBasicType returns true if the element is a basic type.
+func (t *TypeElement) IsBasicType() bool {
+	switch t.Type {
+	case "string", "integer", "float", "boolean":
+		return true
+	}
+	return false
+}
+
+// IsExported returns true if the element Name starts with an uppercase letter.
+func (t *TypeElement) IsExported() bool {
+	if t.Name == "" {
+		return false
+	}
+
+	r := []rune(t.Name)
+	return unicode.IsUpper(r[0])
+}
+
+func (t *TypeElement) BuildString(formatName string) string {
+	if formatName == "json-list" {
+		return t.Type
+	}
+
 	// typeString is the type followed by optional type ref.
 	typeString := t.Type
 	if t.TypeRef != "" {
@@ -158,6 +186,142 @@ type NativeType map[string]string
 // TypeList holds a slice of TypeElements.
 type TypeList []*TypeElement
 
+// String builds a default string representation of a type list.
+func (typeList TypeList) String() string {
+	return typeList.BuildString("")
+}
+
+// String builds a default string representation of a type list.
+func (typeList TypeList) BuildString(formatName string) string {
+	// Keep track of indents by parentID and element ID.
+	indentLevel := 1
+	lastParentID := 0
+
+	parentIndents := map[int]string{}
+	elemIndents := map[int]string{}
+	var parentIndent, elemIndent string
+
+	var indent, otherIndent string
+	var indents []string
+
+	var prefix, otherPrefix string
+	var prefixes []string
+
+	// Set formatting options.
+	printLabel := true
+	quoteIndent := false
+	commaIndent := false
+
+	switch formatName {
+	case "json-list":
+		printLabel = false
+		quoteIndent = true
+		commaIndent = true
+
+		parentIndents[lastParentID] = "$"
+		elemIndents[lastParentID] = "$"
+	default:
+		parentIndents[lastParentID] = strings.Repeat(".", 2*indentLevel)
+	}
+
+	// Build output lines.
+	lines := []string{}
+
+	// Indent based on parent ID.
+	parentsSeen := map[int]int{lastParentID: indentLevel}
+
+	for _, t := range typeList {
+		// Detect when parent changes.
+		if t.ParentID != lastParentID {
+			// Parent ID changed.
+			if parentsSeen[t.ParentID] > 0 {
+				// Already seen so moving back up the stack.
+				indentLevel = parentsSeen[t.ParentID]
+				parentIndent = parentIndents[t.ParentID]
+				elemIndent = elemIndents[t.ID]
+			} else {
+				indentLevel++
+				parentsSeen[t.ParentID] = indentLevel
+
+				parentIndent = ""
+				elemIndent = ""
+			}
+		}
+
+		if printLabel {
+			// Prefix 1st line with Label, other lines with " "
+			if t.Label != "" {
+				prefix = fmt.Sprintf("%q", t.Label)
+				otherPrefix = strings.Repeat(" ", len(prefix))
+				prefixes = []string{
+					prefix,
+					otherPrefix,
+				}
+			}
+		}
+
+		// Build indent strings based on format name.
+		if elemIndent == "" {
+			switch formatName {
+			case "json-list":
+				// Get the parent indent from the parent element.
+				parentIndent = elemIndents[t.ParentID]
+
+				// Indent with JSON path
+				jsonAlias := t.Alias("json")
+				if jsonAlias != "" {
+					//	Add current ref to parent path.
+					elemIndent = parentIndent + "." + jsonAlias
+				} else {
+					elemIndent = parentIndent
+				}
+
+				if t.Type == "list" {
+					elemIndent = elemIndent + "[]"
+				}
+			default:
+				parentIndent = strings.Repeat(".", 2*indentLevel)
+				parentIndents[t.ParentID] = parentIndent
+
+				elemIndent = parentIndent
+			}
+
+			parentIndents[t.ParentID] = parentIndent
+			elemIndents[t.ID] = elemIndent
+		}
+
+		indent = elemIndent
+		if quoteIndent {
+			indent = fmt.Sprintf("%q", indent)
+		}
+		if commaIndent {
+			indent += ","
+		}
+		otherIndent = strings.Repeat(" ", len(indent))
+
+		indents = []string{indent, otherIndent}
+
+		addLine := true
+		switch formatName {
+		case "json-list":
+			addLine = false
+			if t.Err == nil && t.IsBasicType() && t.IsExported() {
+				if strings.HasSuffix(elemIndent, "[]") {
+					addLine = true
+				} else if t.Alias("json") != "" {
+					addLine = true
+				}
+			}
+		}
+
+		if addLine {
+			lines = append(lines, fmt.Sprintf("%s", util.BlockIndent(t.BuildString(formatName), prefixes, indents)))
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // TypeResult is the result of parsing types.
 type TypeResult struct {
 	// Types is a list of types in the order found.
@@ -178,6 +342,47 @@ func (t *TypeResult) SortedTypeNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// String builds a default string representation of a type result.
+func (typeResult *TypeResult) String() string {
+	return typeResult.BuildString("")
+}
+
+// BuildString builds a string representation of a type result using the given formatName.
+func (typeResult *TypeResult) BuildString(formatName string) string {
+	// Set formatting options.
+	printHeaders := true
+	printTypeRefs := true
+
+	switch formatName {
+	case "json-list":
+		printHeaders = false
+		printTypeRefs = false
+	}
+
+	// Build output lines.
+	lines := []string{}
+
+	// Print type refs.
+	if printTypeRefs {
+		refNames := typeResult.SortedTypeNames()
+		for _, typeName := range refNames {
+			if printHeaders {
+				lines = append(lines, fmt.Sprintf("*** TypeRef: %s", typeName))
+			}
+			lines = append(lines, typeResult.TypeRefs[typeName].BuildString(formatName))
+		}
+	}
+
+	//	Print types.
+	if printHeaders {
+		lines = append(lines, fmt.Sprintf("*** Types"))
+	}
+	lines = append(lines, typeResult.Types.BuildString(formatName))
+
+	//	Return final string.
+	return strings.Join(lines, "\n")
 }
 
 func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList, a AncestorList, v reflect.Value, s *reflect.StructField, parentErr error) TypeList {
@@ -218,7 +423,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 	a.Add(currentElem.TypeRef)
 
 	native["IsZero"] = util.ValueIfTrue(v.IsZero(), "z", "-")
-	native["IsValid"] = util.ValueIfTrue(v.IsValid(), "v", "-")
+	native["IsValid"] = util.ValueIfTrue(v.IsValid(), "value", "-")
 	native["IsNil"] = "-"
 
 	// Handle un-exported struct fields.
@@ -253,11 +458,12 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 
 	// Implement special JSON parsing rules.
 	if ParseAsJSON {
-		exportName := util.Capitalize(name)
-		if exportName != name {
-			// Use exportName as element name and save unexported name as JSON Alias.
-			currentElem.Name = exportName
-
+		if s == nil || s.PkgPath == "" {
+			exportName := util.Capitalize(name)
+			if exportName != name {
+				// Use exportName as element name and save unexported name as JSON Alias.
+				currentElem.Name = exportName
+			}
 		}
 	}
 

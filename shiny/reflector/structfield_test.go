@@ -61,9 +61,9 @@ func TestNewStructFieldTag(t *testing.T) {
 			gotTag := NewStructFieldTag(test.tag)
 
 			if !reflect.DeepEqual(gotTag, test.wantTag) {
-				t.Errorf("TEST_FAIL %s: got=%v want=%v", test.name, gotTag, test.wantTag)
+				t.Errorf("TEST_FAIL %s: got=%value want=%value", test.name, gotTag, test.wantTag)
 			} else {
-				t.Logf("TEST_OK %s: got=%v", test.name, gotTag)
+				t.Logf("TEST_OK %s: got=%value", test.name, gotTag)
 			}
 		})
 	}
@@ -121,9 +121,9 @@ func TestParseTags(t *testing.T) {
 				got := gotTags[tagName]
 				want := test.wantTags[tagName]
 				if !reflect.DeepEqual(got, want) {
-					t.Errorf("TEST_FAIL %s: %q got=%v want=%v", test.name, tagName, got, want)
+					t.Errorf("TEST_FAIL %s: %q got=%value want=%value", test.name, tagName, got, want)
 				} else {
-					t.Logf("TEST_OK %s: %q got=%v", test.name, tagName, got)
+					t.Logf("TEST_OK %s: %q got=%value", test.name, tagName, got)
 				}
 			}
 		})
