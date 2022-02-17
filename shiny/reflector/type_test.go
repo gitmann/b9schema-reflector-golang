@@ -100,8 +100,6 @@ var testCases = []struct {
 		Label:       "something",
 		Type:        "test",
 		TypeRef:     "testRef",
-		Native:      nil,
-		Err:         nil,
 	}},
 
 	{name: "makeJSON, value", value: makeJSON(nil)},

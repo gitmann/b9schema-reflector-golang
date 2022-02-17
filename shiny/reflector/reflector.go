@@ -64,7 +64,7 @@ func (r *Reflector) ReflectTypes(x interface{}) *TypeResult {
 	parentID := 0
 
 	// Start recursive reflection.
-	r.typeResult.Types = r.reflectTypeImpl(parentID, "", r.typeResult.Types, NewAncestorList(), reflect.ValueOf(x), nil, nil)
+	r.typeResult.Types = r.reflectTypeImpl(parentID, "", r.typeResult.Types, NewAncestorList(), reflect.ValueOf(x), nil, "")
 
 	return r.typeResult
 }

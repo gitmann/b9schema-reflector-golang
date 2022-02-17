@@ -36,7 +36,7 @@ type TypeElement struct {
 	Native map[string]NativeType
 
 	// Capture error if element cannot reflect.
-	Err error
+	Err string
 }
 
 func NewTypeElement(ID, ParentID int, name, label string) *TypeElement {
@@ -136,8 +136,8 @@ func (t *TypeElement) BuildString(formatName string) string {
 	}
 
 	out := fmt.Sprintf("%d,%d,%q,%s", t.ID, t.ParentID, t.Name, typeString)
-	if t.Err != nil {
-		out += "," + t.Err.Error()
+	if t.Err != "" {
+		out += "," + t.Err
 	} else if len(t.Native) > 0 {
 		if PrintNative {
 			nativeLines := []string{out}
@@ -305,7 +305,7 @@ func (typeList TypeList) BuildString(formatName string) string {
 		switch formatName {
 		case "json-list":
 			addLine = false
-			if t.Err == nil && t.IsBasicType() && t.IsExported() {
+			if t.Err == "" && t.IsBasicType() && t.IsExported() {
 				if strings.HasSuffix(elemIndent, "[]") {
 					addLine = true
 				} else if t.Alias("json") != "" {
@@ -385,11 +385,9 @@ func (typeResult *TypeResult) BuildString(formatName string) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList, a AncestorList, v reflect.Value, s *reflect.StructField, parentErr error) TypeList {
+func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList, a AncestorList, v reflect.Value, s *reflect.StructField, parentErr string) TypeList {
 	currentElem := NewTypeElement(r.nextID(), parentID, name, r.Label)
-	if parentErr != nil {
-		currentElem.Err = parentErr
-	}
+	currentElem.Err = ""
 
 	// Append current element to master type list.
 	typeList = append(typeList, currentElem)
@@ -405,7 +403,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 	switch v.Kind() {
 	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		currentElem.Type = "invalid"
-		currentElem.Err = fmt.Errorf("value.Kind %q not supported", v.Kind())
+		currentElem.Err = fmt.Sprintf("value.Kind %q not supported", v.Kind())
 
 		native["Kind"] = v.Kind().String()
 
@@ -417,7 +415,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 
 	// Check cyclical references.
 	if a.Has(currentElem.TypeRef) {
-		currentElem.Err = fmt.Errorf("cyclical reference: %s", currentElem.TypeRef)
+		currentElem.Err = fmt.Sprintf("cyclical reference: %s", currentElem.TypeRef)
 		return typeList
 	}
 	a.Add(currentElem.TypeRef)
@@ -490,7 +488,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 		if v.IsZero() {
 			// Zero value for interface means nil.
 			currentElem.Type = "invalid"
-			currentElem.Err = fmt.Errorf("interface element is nil")
+			currentElem.Err = fmt.Sprintf("interface element is nil")
 		} else {
 			// Non-Zero interface is just an extra layer of abstraction around a real type.
 			// Remove interface from typeList and reflect child element.
@@ -503,7 +501,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 		currentElem.Type = "pointer"
 		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
 
-		if currentElem.Err == nil {
+		if currentElem.Err == "" {
 			// Get target of pointer.
 			var targetValue reflect.Value
 			if v.IsNil() {
@@ -513,7 +511,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 				// Use existing value for valid pointer.
 				targetValue = v.Elem()
 			}
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, nil)
+			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, "")
 		}
 
 	// Array and Slice represent lists of elements.
@@ -522,7 +520,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 	case reflect.Array:
 		currentElem.Type = "list"
 
-		if currentElem.Err == nil {
+		if currentElem.Err == "" {
 			//	Get kind of underlying elements.
 			var targetValue reflect.Value
 			if v.Len() > 0 {
@@ -530,14 +528,14 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 			} else {
 				targetValue = reflect.New(v.Type().Elem()).Elem()
 			}
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, nil)
+			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, "")
 		}
 
 	case reflect.Slice:
 		currentElem.Type = "list"
 		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
 
-		if currentElem.Err == nil {
+		if currentElem.Err == "" {
 			//	Get kind of underlying elements.
 			var sliceElem reflect.Value
 			if v.IsNil() || v.Len() == 0 {
@@ -546,7 +544,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 				sliceElem = v.Index(0)
 			}
 
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), sliceElem, nil, nil)
+			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), sliceElem, nil, "")
 		}
 
 	// Struct and Map represent key-value pairs.
@@ -555,12 +553,12 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 	case reflect.Struct:
 		currentElem.Type = "struct"
 
-		if currentElem.Err == nil {
+		if currentElem.Err == "" {
 			for i := 0; i < v.NumField(); i++ {
 				structField := v.Type().Field(i)
 				targetValue := v.Field(i)
 
-				refList = r.reflectTypeImpl(currentElem.ID, structField.Name, refList, a.Copy(), targetValue, &structField, nil)
+				refList = r.reflectTypeImpl(currentElem.ID, structField.Name, refList, a.Copy(), targetValue, &structField, "")
 			}
 		}
 
@@ -568,15 +566,15 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 		currentElem.Type = "struct"
 		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
 
-		if currentElem.Err == nil {
+		if currentElem.Err == "" {
 			// Map key must be a string.
 			if v.Type().Key().Kind() != reflect.String {
-				currentElem.Err = fmt.Errorf("map key type %q not supported", v.Type().Key())
+				currentElem.Err = fmt.Sprintf("map key type %q not supported", v.Type().Key())
 			}
 
 			// Empty map not allowed.
 			if v.Len() == 0 {
-				currentElem.Err = fmt.Errorf("empty map not supported")
+				currentElem.Err = fmt.Sprintf("empty map not supported")
 			}
 
 			// Iterate through map by keys in sorted order.
@@ -613,9 +611,9 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 				mapKeyName := k.Name
 				mapValue := v.MapIndex(k.Value)
 
-				var duplicateErr error
+				var duplicateErr string
 				if uniqKeys[k.ExportName] > 0 {
-					duplicateErr = fmt.Errorf("duplicate map key %q (%q)", k.ExportName, k.Name)
+					duplicateErr = fmt.Sprintf("duplicate map key %q (%q)", k.ExportName, k.Name)
 				}
 				uniqKeys[k.ExportName]++
 
@@ -637,7 +635,7 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 			for i, listItem := range refList {
 				newItem := listItem.Copy()
 				newItem.ID = r.nextID()
-				newItem.Err = nil
+				newItem.Err = ""
 				if i == 0 {
 					newItem.Name = ""
 				}
