@@ -4,16 +4,24 @@ import (
 	"reflect"
 )
 
+const (
+	NATIVE_DIALECT = "golang"
+)
+
 var (
 	// PrintNative includes native details in output if true.
 	PrintNative = true
 
-	// NoRefs expands TypeRefs in types if true.
-	NoRefs = false
+	// PathPrefix uses the path as the prefix for string output.
+	PathPrefix = true
+
+	// DeReference converts TypeRefs to their included types.
+	// - If TyepRefs have a cyclical relationship, the last TypeRef is kept as a TypeRef.
+	DeReference = false
 
 	// ParseAsJSON applies JSON parsing rules.
 	// - Any lowercase element names are converted to 1st character uppercase so that they are exported.
-	//   - Original lowercase name is saved as the native "json" Alias.
+	//   - Original lowercase name is saved as the native "json" GetName.
 	ParseAsJSON = true
 )
 
@@ -38,20 +46,15 @@ func NewReflector() *Reflector {
 
 func (r *Reflector) Reset() *Reflector {
 	// Initialize state.
-	r.lastID = 0
+	resetID()
 
 	r.typeResult = &TypeResult{
-		Types:    make(TypeList, 0),
-		TypeRefs: make(map[string]TypeList),
+		Root: NewRootElement(),
+		Refs: NewTypeRefs(),
 	}
 
 	// Return *Reflector for chaining.
 	return r
-}
-
-func (r *Reflector) nextID() int {
-	r.lastID++
-	return r.lastID
 }
 
 // ReflectTypes builds a reflector list of elements from the given interface.
@@ -60,11 +63,8 @@ func (r *Reflector) ReflectTypes(x interface{}) *TypeResult {
 		r.Reset()
 	}
 
-	// Reset parentID to root.
-	parentID := 0
-
 	// Start recursive reflection.
-	r.typeResult.Types = r.reflectTypeImpl(parentID, "", r.typeResult.Types, NewAncestorList(), reflect.ValueOf(x), nil, "")
+	r.reflectTypeImpl(NewAncestorTypeRef(), r.typeResult.Root.NewChild(""), reflect.ValueOf(x), nil)
 
 	return r.typeResult
 }

@@ -16,15 +16,20 @@ import (
 type StructFieldTag struct {
 	Ignore  bool
 	Alias   string
-	Options string
-
-	// If parsing fails, Raw holds the original string.
-	Raw string
+	Options *NativeOption
 }
 
 // NewStructFieldTag parses the contents of tag string to initialize a StructFieldTag.
+// - Reference for common tags: https://zchee.github.io/golang-wiki/Well-known-struct-tags/
+//
+// Tags alwyas follow the pattern: <alias>,<comma-delimited options>
+// - if tag string is "-", field is ignored
+// - either <alias> or <options> can be omitted
+// - if <options> is empty, the comma may be omitted
 func NewStructFieldTag(tag string) *StructFieldTag {
-	t := &StructFieldTag{}
+	t := &StructFieldTag{
+		Options: NewNativeOption(),
+	}
 
 	if s, err := strconv.Unquote(tag); err == nil {
 		tag = strings.TrimSpace(s)
@@ -35,42 +40,65 @@ func NewStructFieldTag(tag string) *StructFieldTag {
 		return nil
 	}
 
+	var rawOptions string
 	if tag == "-" {
 		// Ignored field.
 		t.Ignore = true
 	} else if strings.Contains(tag, ",") {
-		//	Alias with options.
+		//	GetName with options.
 		tokens := strings.SplitN(tag, ",", 2)
 
 		t.Alias = strings.TrimSpace(tokens[0])
-		t.Options = strings.TrimSpace(tokens[1])
+		rawOptions = strings.TrimSpace(tokens[1])
 	} else {
 		// Just an alias.
 		t.Alias = tag
 	}
 
+	if rawOptions != "" {
+		// The raw option string is a comma-delimited list of option values.
+		for _, opt := range strings.Split(rawOptions, ",") {
+			opt = strings.TrimSpace(opt)
+			if opt != "" {
+				tokens := strings.SplitN(opt, "=", 2)
+				if len(tokens) > 0 {
+					var key, val string
+					key = strings.TrimSpace(tokens[0])
+					if len(tokens) > 1 {
+						val = strings.TrimSpace(tokens[1])
+					}
+
+					if val != "" {
+						t.Options.AddKeyVal(key, val)
+					} else {
+						t.Options.AddVal(key)
+					}
+				}
+			}
+		}
+	}
+
 	return t
 }
 
-// AsMap renders the StructFieldTag as a map of strings.
-func (t *StructFieldTag) AsMap() map[string]string {
-	m := map[string]string{}
-	if t.Ignore {
-		m["Ignore"] = "true"
+// Equals returns true if two StructFieldTag structs have the same values.
+func (s *StructFieldTag) Equals(other *StructFieldTag) bool {
+	if s == nil && other == nil {
+		// Both are nil so consider them equal.
+		return true
+	} else if s == nil || other == nil {
+		// One is nil so these are different.
+		return false
 	}
-	if t.Alias != "" {
-		m["Alias"] = t.Alias
+
+	if s.Ignore != other.Ignore {
+		return false
 	}
-	if t.Options != "" {
-		m["Options"] = t.Options
+	if s.Alias != other.Alias {
+		return false
 	}
-	if t.Raw != "" {
-		m["Raw"] = t.Raw
-	}
-	if len(m) > 0 {
-		return m
-	}
-	return nil
+
+	return s.Options.Equals(other.Options)
 }
 
 // Tags stores struct tags by tag name.

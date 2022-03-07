@@ -7,52 +7,197 @@ import (
 	"unsafe"
 )
 
-var testCases = []struct {
+var allTests = [][]TestCase{
+	//invalidTests,
+	specialTests,
+	//basicTests,
+	//arrayTests,
+	//sliceTests,
+	//mapTests,
+	//structTests,
+	//interfaceTests,
+	//pointerTests,
+	//jsonTests,
+}
+
+type TestCase struct {
 	name  string
 	value interface{}
-}{
+}
+
+// *** All reflect types ***
+
+//Interface
+//Map
+//Ptr
+//Slice
+//Struct
+
+// Invalid types for shiny schemas.
+// - Invalid
+// - Complex64
+// - Complex128
+// - Chan
+// - Func
+// - UnsafePointer
+var invalidTests = []TestCase{
 	{name: "nil", value: nil},
 	{name: "complex", value: complex(123, 456)},
+	{name: "complex", value: complex64(complex(123, 456))},
+	{name: "complex", value: complex128(complex(123, 456))},
 	{name: "chan", value: make(chan bool)},
 	{name: "func", value: func() {}},
-	{name: "uintptr", value: uintptr(123)},
 	{name: "unsafeptr", value: func() interface{} { s := "hello"; return unsafe.Pointer(&s) }()},
-	{name: "map[GoodEntity]bool, nil", value: func() interface{} { var s map[GoodEntity]bool; return s }()},
-	{name: "map[string]bool, nil", value: func() interface{} { var s map[string]bool; return s }()},
-	{name: "map[string]bool, empty", value: map[string]bool{}},
+}
 
-	{name: "string, var", value: func() interface{} { var s string; return s }()},
-	{name: "string, empty", value: ""},
-	{name: "string, value", value: "hello"},
+// Basic types for shiny schemas.
+//Bool
+//Int
+//Int8
+//Int16
+//Int32
+//Int64
+//Uint
+//Uint8
+//Uint16
+//Uint32
+//Uint64
+//Uintptr
+//Float32
+//Float64
+//String
+var basicTests = []TestCase{
+	{name: "bool-var", value: func() interface{} { var s bool; return s }()},
+	{name: "bool-value", value: true},
 
-	{name: "int64, var", value: func() interface{} { var s int64; return s }()},
-	{name: "int64, empty", value: int64(0)},
-	{name: "int64, value", value: int64(123)},
+	{name: "int-var", value: func() interface{} { var s int; return s }()},
+	{name: "int-value", value: int(123)},
 
-	{name: "float64, var", value: func() interface{} { var s float64; return s }()},
-	{name: "float64, empty", value: float64(0)},
-	{name: "float64, value", value: float64(456.789)},
+	{name: "int8-var", value: func() interface{} { var s int8; return s }()},
+	{name: "int8-value", value: int8(123)},
 
-	{name: "bool, var", value: func() interface{} { var s bool; return s }()},
-	{name: "bool, empty", value: false},
-	{name: "bool, value", value: true},
+	{name: "int16-var", value: func() interface{} { var s int16; return s }()},
+	{name: "int16-value", value: int16(123)},
 
-	{name: "[]string, var", value: func() interface{} { var s []string; return s }()},
-	{name: "[]string, nil", value: ([]string)(nil)},
-	{name: "[]string, empty", value: []string{}},
-	{name: "[]string, value", value: []string{"hello", "hey", "hi"}},
+	{name: "int32-var", value: func() interface{} { var s int32; return s }()},
+	{name: "int32-value", value: int32(123)},
 
-	{name: "[0]string, var", value: func() interface{} { var s [0]string; return s }()},
-	{name: "[0]string, nil", value: [0]string{}},
+	{name: "int64-var", value: func() interface{} { var s int64; return s }()},
+	{name: "int64-value", value: int64(123)},
 
-	{name: "[3]string, var", value: func() interface{} { var s [3]string; return s }()},
-	{name: "[3]string, nil", value: [3]string{}},
-	{name: "[3]string, value", value: [3]string{"hello", "hey", "hi"}},
+	{name: "uint-var", value: func() interface{} { var s uint; return s }()},
+	{name: "uint-value", value: uint(123)},
 
-	{name: "map[string]string, var", value: func() interface{} { var s map[string]string; return s }()},
-	{name: "map[string]string, nil", value: map[string]string{}},
-	{name: "map[string]string, value", value: map[string]string{"hello": "one", "hey": "two", "hi": "three"}},
+	{name: "uint8-var", value: func() interface{} { var s uint8; return s }()},
+	{name: "uint8-value", value: uint8(123)},
 
+	{name: "int16-var", value: func() interface{} { var s int16; return s }()},
+	{name: "int16-value", value: int16(123)},
+
+	{name: "int32-var", value: func() interface{} { var s int32; return s }()},
+	{name: "int32-value", value: int32(123)},
+
+	{name: "uint64-var", value: func() interface{} { var s uint64; return s }()},
+	{name: "uint64-value", value: uint64(123)},
+
+	{name: "uintptr-var", value: func() interface{} { var s uintptr; return s }()},
+	{name: "uintptr-value", value: uintptr(123)},
+
+	{name: "float32-var", value: func() interface{} { var s float32; return s }()},
+	{name: "float32-value", value: float32(234.345)},
+
+	{name: "float64-var", value: func() interface{} { var s float64; return s }()},
+	{name: "float64-value", value: float64(234.345)},
+
+	{name: "string-var", value: func() interface{} { var s string; return s }()},
+	{name: "string-value", value: "hello"},
+}
+
+// Special types.
+var specialTests = []TestCase{
+	{name: "[]byte-var", value: func() interface{} { var s []byte; return s }()},
+	{name: "[]byte-value", value: []byte(`hello`)},
+
+	//{name: "datetime-var", value: func() interface{} { var s time.Time; return s }()},
+	//{name: "datetime-value", value: time.Now()},
+}
+
+// Array tests.
+var arrayTests = []TestCase{
+	{name: "[0]string-var", value: func() interface{} { var s [0]string; return s }()},
+	{name: "[0]string-nil", value: [0]string{}},
+
+	{name: "[3]string-var", value: func() interface{} { var s [3]string; return s }()},
+	{name: "[3]string-nil", value: [3]string{}},
+	{name: "[3]string-value", value: [3]string{"hello", "hey", "hi"}},
+
+	{name: "[2][3]string-var", value: func() interface{} { var s [2][3]string; return s }()},
+	{name: "[2][3]string-nil", value: [2][3]string{}},
+	{name: "[2][3]string-value", value: [2][3]string{[3]string{"hello", "hey", "hi"}}},
+}
+
+// Slice tests.
+var sliceTests = []TestCase{
+	{name: "[]string-var", value: func() interface{} { var s []string; return s }()},
+	{name: "[]string-nil", value: ([]string)(nil)},
+	{name: "[]string-empty", value: []string{}},
+	{name: "[]string-value", value: []string{"hello", "hey", "hi"}},
+	{name: "[][]string-value", value: [][]string{[]string{"hello", "hey", "hi"}}},
+}
+
+var mapTests = []TestCase{
+	{name: "map[StringStruct]bool-nil", value: func() interface{} { var s map[StringStruct]bool; return s }()},
+	{name: "map[string]bool-nil", value: func() interface{} { var s map[string]bool; return s }()},
+	{name: "map[string]bool-empty", value: map[string]bool{}},
+	{name: "map[string]bool-value", value: map[string]bool{"One": true, "two": false, "Three": false, "four": true}},
+	{name: "map[string]interface-value", value: map[string]interface{}{"One": true, "two": false, "Three": false, "four": true}},
+	{name: "map[string]map[string]bool-empty", value: map[string]map[string]bool{}},
+}
+
+var structTests = []TestCase{
+	{name: "struct-empty", value: func() interface{} { var g struct{}; return g }()},
+	{name: "PrivateStruct-nil", value: func() interface{} { var g PrivateStruct; return g }()},
+	{name: "BasicStruct-nil", value: func() interface{} { var g BasicStruct; return g }()},
+	{name: "CompoundStruct-nil", value: func() interface{} { var g CompoundStruct; return g }()},
+	{name: "CycleTest-nil", value: func() interface{} { var g CycleTest; return g }()},
+}
+
+var interfaceTests = []TestCase{
+	{name: "interface{}-var", value: func() interface{} { var g interface{}; return g }()},
+	{name: "interface{}-nil", value: nil},
+	{name: "interface{}-bool", value: true},
+	{name: "interface{}-int", value: 123},
+	{name: "interface{}-float", value: 234.345},
+	{name: "interface{}-string", value: "hello"},
+}
+
+var pointerTests = []TestCase{
+	{name: "*bool", value: func() interface{} { var g bool; return &g }()},
+	{name: "*int", value: func() interface{} { var g int; return &g }()},
+	{name: "*float", value: func() interface{} { var g float64; return &g }()},
+	{name: "*string", value: func() interface{} { var g string; return &g }()},
+	{name: "*array", value: func() interface{} { var g [0]string; return &g }()},
+	{name: "*slice", value: func() interface{} { var g []string; return &g }()},
+	{name: "*map", value: func() interface{} { var g map[string]string; return &g }()},
+	{name: "*StringStruct-var", value: func() interface{} { var g *StringStruct; return g }()},
+	{name: "**StringStruct-var", value: func() interface{} { var g *StringStruct; return &g }()},
+}
+
+var jsonTests = []TestCase{
+	{name: "json-null", value: fromJSON([]byte(`null`))},
+	{name: "json-string", value: fromJSON([]byte(`"hello"`))},
+	{name: "json-int", value: fromJSON([]byte(`123`))},
+	{name: "json-float", value: fromJSON([]byte(`234.345`))},
+	{name: "json-bool", value: fromJSON([]byte(`true`))},
+	{name: "json-list", value: fromJSON([]byte(`[123,234,345]`))},
+	{name: "json-list-mixed", value: fromJSON([]byte(`["hello",123,234.345,true]`))},
+	{name: "json-object", value: fromJSON([]byte(`{"key1":"val1","key2":123,"key3":false}`))},
+}
+
+//
+//{name: "makeJSON, value", value: makeJSON(nil)},
+
+var testCases = []TestCase{
 	{name: "GoodEntity, var", value: func() interface{} { var g GoodEntity; return g }()},
 	{name: "GoodEntity, empty", value: GoodEntity{}},
 	{name: "GoodEntity, values", value: GoodEntity{
@@ -89,40 +234,111 @@ var testCases = []struct {
 	}},
 
 	{name: "NamedEntity, empty", value: &NamedEntity{}},
-
-	{name: "CycleTest, empty", value: &CycleTest{}},
-
-	{name: "*TypeElement, values", value: &TypeElement{
-		ID:          123,
-		ParentID:    234,
-		Name:        "hello",
-		Description: "blah",
-		Label:       "something",
-		Type:        "test",
-		TypeRef:     "testRef",
-	}},
-
-	{name: "makeJSON, value", value: makeJSON(nil)},
 }
 
-func TestReflector_ReflectTypes(t *testing.T) {
+func runTests(t *testing.T, testCases []TestCase) {
 	r := NewReflector()
 
 	// Configure package-level settings.
-	PrintNative = false
-	NoRefs = true
+	PrintNative = true
+	PathPrefix = false
+	DeReference = false
 	ParseAsJSON = true
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
 			r.Reset()
-			r.Label = test.name
+			//r.Label = test.name
 
 			gotResult := r.ReflectTypes(test.value)
-			fmt.Println(gotResult.BuildString("json-list"))
+			fmt.Println(gotResult.String(""))
 
 			t.Logf("TEST_OK %s", test.name)
 		})
+	}
+}
+
+func TestReflector_AllTests(t *testing.T) {
+	for _, testCases := range allTests {
+		runTests(t, testCases)
+	}
+}
+
+// StringStruct has one string field.
+type StringStruct struct {
+	Value string
+}
+
+// Private Struct only has private fields.
+type PrivateStruct struct {
+	boolVal    bool
+	intVal     int
+	float64Val float64
+	stringVal  string
+}
+
+// BasicStruct has one field for each basic type.
+type BasicStruct struct {
+	BoolVal    bool
+	IntVal     int
+	Int8Val    int8
+	Int16Val   int16
+	Int32Val   int32
+	Int64Val   int64
+	UintVal    uint
+	Uint8Val   uint8
+	Uint16Val  uint16
+	Uint32Val  uint32
+	Uint64Val  uint64
+	UintptrVal uintptr
+	Float32Val float32
+	Float64Val float64
+	StringVal  string
+}
+
+// CompoundStruct has fields with compound types.
+type CompoundStruct struct {
+	//	Array
+	ZeroArrayVal  [0]string
+	ThreeArrayVal [3]string
+
+	//	Slice
+	SliceVal []string
+
+	//	Map
+	MapVal map[string]string
+
+	//	Struct
+	StructVal        StringStruct
+	PrivateStructVal PrivateStruct
+}
+
+// Test cyclical relationships:
+// A --> B --> C --> A
+type AStruct struct {
+	AName  string
+	AChild *BStruct
+}
+
+type BStruct struct {
+	BName  string
+	BChild *CStruct
+}
+
+type CStruct struct {
+	CName  string
+	CChild *AStruct
+}
+
+type BadType interface{}
+
+type CycleTest struct {
+	Level  int
+	BadVal BadType
+	CycleA AStruct
+	CycleB *BStruct
+	CycleC struct {
+		C CStruct
 	}
 }
 
@@ -235,28 +451,22 @@ type OtherEntity struct {
 	}
 }
 
-// Test cyclical relationships:
-// A --> B --> C --> A
-type AStruct struct {
-	AName  string
-	AChild *BStruct
-}
+// fromJSON converts a JSON string into an interface.
+func fromJSON(in []byte) interface{} {
+	var out interface{}
 
-type BStruct struct {
-	BName  string
-	BChild *CStruct
-}
+	if err := json.Unmarshal(in, &out); err != nil {
+		return fmt.Errorf("ERROR json.Unmarshal: %s", err)
+	}
 
-type CStruct struct {
-	CName  string
-	CChild *AStruct
-}
+	// DEBUGXXXXX Print indented JSON string.
+	if out != nil {
+		if b, err := json.MarshalIndent(out, "", "  "); err == nil {
+			fmt.Println(string(b))
+		}
+	}
 
-type CycleTest struct {
-	Level  int
-	CycleA *AStruct
-	CycleB *BStruct
-	CycleC *CStruct
+	return out
 }
 
 // makeJSON converts an interface to JSON.
@@ -307,18 +517,6 @@ func makeJSON(x interface{}) interface{} {
 	if b, err := json.Marshal(x); err != nil {
 		return fmt.Errorf("ERROR json.Marshal: %s", err)
 	} else {
-		var x interface{}
-		if err := json.Unmarshal(b, &x); err != nil {
-			return fmt.Errorf("ERROR json.Unmarshal: %s", err)
-		}
-
-		// DEBUGXXXXX Print indented JSON string.
-		if x != nil {
-			if b, err := json.MarshalIndent(x, "", "  "); err == nil {
-				fmt.Println(string(b))
-			}
-		}
-
-		return x
+		return fromJSON(b)
 	}
 }

@@ -2,6 +2,9 @@ package reflector
 
 import (
 	"fmt"
+	"github.com/gitmann/shiny-reflector-golang/shiny/enum/generictype"
+	"github.com/gitmann/shiny-reflector-golang/shiny/enum/threeflag"
+	"github.com/gitmann/shiny-reflector-golang/shiny/enum/typecategory"
 	"reflect"
 	"sort"
 	"strings"
@@ -11,73 +14,190 @@ import (
 )
 
 // TypeElement holds type information about an element.
+// - TypeElement should be cross-platform and only use basic types.
 type TypeElement struct {
 	// Unique identifier for an element.
 	ID int
 
-	// Identifier for parent of an element.
-	ParentID int
+	// Pointer to Parent
+	Parent *TypeElement
+
+	// Pointers to children.
+	Children *TypeList
 
 	// Optional Name and Description of element.
 	// - Name applies to struct/map types with string keys.
 	Name        string
 	Description string
 
-	// Label is an optional label for a block of elements.
-	Label string
-
 	// Generic type of element.
-	Type string
+	Type         string
+	TypeCategory string
 
 	// TypeRef holds the name of a type (e.g. struct)
 	TypeRef string
 
-	// Native type features by language or implementation name.
-	Native map[string]NativeType
+	// NativeDialect is the name of the dialect that was the source for the schema.
+	NativeDialect string
+
+	// Native type features by dialect name.
+	Native map[string]*NativeType
 
 	// Capture error if element cannot reflect.
-	Err string
+	Error string
 }
 
-func NewTypeElement(ID, ParentID int, name, label string) *TypeElement {
-	return &TypeElement{
-		ID:       ID,
-		ParentID: ParentID,
-		Name:     name,
-		Label:    label,
-		Native:   make(map[string]NativeType),
+// NewRootElement creates a new type element that is a root of a tree.
+// - Root elements do not have parents and do not produce output.
+func NewRootElement() *TypeElement {
+	r := NewTypeElement("root")
+	r.Type = "root"
+
+	return r
+}
+
+// NewTypeElement creates a new type element without a Parent or Children.
+func NewTypeElement(name string) *TypeElement {
+	t := &TypeElement{
+		ID: nextID(),
+
+		Parent:   nil,
+		Children: NewTypeList(),
+
+		Name: name,
+
+		NativeDialect: NATIVE_DIALECT,
+		Native:        make(map[string]*NativeType),
 	}
+	t.Native[NATIVE_DIALECT] = NewNativeType(NATIVE_DIALECT)
+
+	return t
 }
 
-// Copy makes a copy of a TypeElement.
+// NewChild creates a new type element that is a child of the current one.
+func (t *TypeElement) NewChild(name string) *TypeElement {
+	childElem := NewTypeElement(name)
+	t.AddChild(childElem)
+
+	return childElem
+}
+
+// AddChild adds a child element to the current element.
+// - Sets Parent on the child element.
+func (t *TypeElement) AddChild(childElem *TypeElement) {
+	// Ignore nil.
+	if childElem == nil {
+		return
+	}
+
+	if childElem.Parent != nil {
+		childElem.Parent.RemoveChild(childElem)
+	}
+
+	childElem.Parent = t
+	t.Children.Push(childElem)
+}
+
+// RemoveAllChildren removes all children from the current element.
+func (t *TypeElement) RemoveAllChildren() {
+	for _, childElem := range t.Children.Elements() {
+		childElem.Parent = nil
+	}
+	t.Children = NewTypeList()
+}
+
+// RemoveChild removes the given child from the Children list.
+// - Uses ID for matching.
+// - Sets Parent on child to nil.
+func (t *TypeElement) RemoveChild(childElem *TypeElement) {
+	if childElem == nil {
+		return
+	}
+
+	// Copy all children except the given one.
+	newChildren := NewTypeList()
+	for _, elem := range t.Children.Elements() {
+		if elem.ID != childElem.ID {
+			newChildren.Push(elem)
+		} else {
+			childElem.Parent = nil
+		}
+	}
+
+	t.Children = newChildren
+}
+
+// Copy makes a copy of a TypeElement and its Children.
+// - The copied element has no Parent.
 func (t *TypeElement) Copy() *TypeElement {
 	n := &TypeElement{
-		ID:          t.ID,
-		ParentID:    t.ParentID,
+		ID: nextID(),
+
+		Parent:   nil,
+		Children: NewTypeList(),
+
 		Name:        t.Name,
 		Description: t.Description,
-		Label:       t.Label,
-		Type:        t.Type,
-		TypeRef:     t.TypeRef,
-		Native:      make(map[string]NativeType),
-		Err:         t.Err,
+
+		Type:         t.Type,
+		TypeCategory: t.TypeCategory,
+
+		TypeRef: t.TypeRef,
+
+		NativeDialect: t.NativeDialect,
+		Native:        make(map[string]*NativeType),
+
+		Error: t.Error,
 	}
 
-	for langName, nativeMap := range t.Native {
-		n.Native[langName] = make(NativeType)
-		for k, v := range nativeMap {
-			n.Native[langName][k] = v
-		}
+	// Copy Children with new element as parent.
+	n.Children = t.Children.Copy(n)
+
+	for dialect, native := range t.Native {
+		n.Native[dialect] = native.Copy()
 	}
 
 	return n
 }
 
-// Alias returns the alias for the given lang or Name.
-func (t *TypeElement) Alias(lang string) string {
+// ParentID returns the ID of the parent of the current element.
+func (t *TypeElement) ParentID() int {
+	if t.Parent != nil {
+		return t.Parent.ID
+	}
+
+	// Return -1 if no parent.
+	return -1
+}
+
+// ChildPaths returns a list of paths for all Children of the element.
+// - If ChildPaths are equal, then the types are equal.
+func (t *TypeElement) ChildPaths() []*PathList {
+	//TODO: implement this!
+	panic("not implemented")
+}
+
+// Path returns the PathList to the current element built from all ancestor path lists.
+func (t *TypeElement) Path() *PathList {
+	var p *PathList
+
+	if t.Parent == nil {
+		// This is a root element. Return a new, empty PathList.
+		return NewPathList()
+	}
+
+	// Get the parent's path list and append the current element's path.
+	p = t.Parent.Path()
+	p.Push(t.PathString())
+
+	return p
+}
+
+// GetName returns the alias for the given lang or Name.
+func (t *TypeElement) GetName(lang string) string {
 	if t.Native != nil {
 		if t.Native[lang] != nil {
-			if a := t.Native[lang]["Alias"]; a != "" {
+			if a := t.Native[lang].Name; a != "" {
 				return a
 			}
 		}
@@ -85,24 +205,50 @@ func (t *TypeElement) Alias(lang string) string {
 	return t.Name
 }
 
-// SetAlias sets the Alias for the native language implementation.
-func (t *TypeElement) SetAlias(lang, alias string) {
+// SetName sets the GetName for the native dialect.
+func (t *TypeElement) SetName(dialect, alias string) {
 	if t.Native == nil {
-		t.Native = make(map[string]NativeType)
+		t.Native = make(map[string]*NativeType)
 	}
-	if a := t.Native[lang]; a == nil {
-		t.Native[lang] = make(NativeType)
+	if a := t.Native[dialect]; a == nil {
+		t.Native[dialect] = NewNativeType(dialect)
 	}
-	t.Native[lang]["Alias"] = alias
+	t.Native[dialect].Name = alias
+}
+
+// NativeDefault returns the native element for the NativeDialect.
+func (t *TypeElement) NativeDefault() *NativeType {
+	return t.Native[t.NativeDialect]
+}
+
+// PathString returns the element's string for the PathList.
+// Format is: [<Name>:]<Type>[:<TypeRef>]
+// - If Name is set, prefix with "Name:"
+// - If TypeRef is set, suffix with ":TypeRef"
+func (t *TypeElement) PathString() string {
+	// Always start with the Type.
+	path := generictype.PathDefaultOfType(t.Type)
+
+	// Add Name prefix if set.
+	if t.Name != "" {
+		path = fmt.Sprintf("%s:%s", t.Name, path)
+	}
+
+	// Add TypeRef suffix if set.
+	if t.NativeDefault().TypeRef != "" {
+		return fmt.Sprintf("%s:%s", path, t.NativeDefault().TypeRef)
+	}
+
+	return path
 }
 
 // String builds a string representation of the TypeElement.
 // Default is to build a CSV representation:
-// <id>,<parentID>,<type>,<name>,<err>
+// <id>,<parent>,<type>,<name>,<err>
 //
 // Implementation specifics are output on multiple, indented lines in JSON format.
 func (t *TypeElement) String() string {
-	return t.BuildString("")
+	return strings.Join(t.BuildStrings(""), "\n")
 }
 
 // IsBasicType returns true if the element is a basic type.
@@ -124,312 +270,755 @@ func (t *TypeElement) IsExported() bool {
 	return unicode.IsUpper(r[0])
 }
 
-func (t *TypeElement) BuildString(formatName string) string {
-	if formatName == "json-list" {
-		return t.Type
-	}
+func (t *TypeElement) BuildStrings(formatName string) []string {
+	outLines := []string{}
 
-	// typeString is the type followed by optional type ref.
-	typeString := t.Type
-	if t.TypeRef != "" {
-		typeString += ":" + t.TypeRef
-	}
+	// Ignore root elements without Parents.
+	if t.Parent != nil {
+		out := fmt.Sprintf("%d,%d,%q,%s,%q", t.ID, t.ParentID(), t.Name, t.Type, t.TypeRef)
 
-	out := fmt.Sprintf("%d,%d,%q,%s", t.ID, t.ParentID, t.Name, typeString)
-	if t.Err != "" {
-		out += "," + t.Err
-	} else if len(t.Native) > 0 {
-		if PrintNative {
-			nativeLines := []string{out}
+		if !PathPrefix {
+			// Start output with the path.
+			out = fmt.Sprintf("%s,%s", t.Path().String(), out)
+		}
 
-			// Print native fields with fixed length for keys.
-			for language, features := range t.Native {
-				nativeLines = append(nativeLines, fmt.Sprintf("  Native: %q", language))
+		if t.Error != "" {
+			out += "," + t.Error
+		}
 
-				// Collect key/value pairs and max key length
-				nativeKeyVal := [][]string{}
-				keyLen := 0
+		outLines = append(outLines, out)
 
-				for k, v := range features {
-					if v == "" {
-						// Skip empty values.
-						continue
+		if len(t.Native) > 0 {
+			if PrintNative {
+				// Print native fields with fixed length for keys.
+				for _, native := range t.Native {
+					// First line is:
+					// <dialect>,<name>,<type>,<include>
+					out = fmt.Sprintf("  %q,%q,%s,%q,%s",
+						native.Dialect,
+						native.Name,
+						native.Type,
+						native.TypeRef,
+						native.Include,
+					)
+					if native.Error != "" {
+						out += "," + native.Error
 					}
+					outLines = append(outLines, out)
 
-					if len(k) > keyLen {
-						keyLen = len(k)
-					}
-					nativeKeyVal = append(nativeKeyVal, []string{k, v})
-				}
-
-				// Sort by key name. This sorts uppercase before lowercase.
-				sort.Slice(nativeKeyVal, func(i, j int) bool { return nativeKeyVal[i][0] < nativeKeyVal[j][0] })
-
-				// Add lines using key length.
-				for _, line := range nativeKeyVal {
-					newLine := fmt.Sprintf("    %-*s: %s", keyLen, line[0], line[1])
-					nativeLines = append(nativeLines, newLine)
+					out = fmt.Sprintf("    %s%s",
+						strings.Repeat(" ", len(native.Dialect)+1),
+						strings.Join(native.Options.AsList(), ","))
+					outLines = append(outLines, out)
 				}
 			}
-
-			// Construct output string.
-			out = strings.Join(nativeLines, "\n")
 		}
 	}
 
-	return out
+	// Add output lines from Children.
+	outLines = append(outLines, t.Children.BuildStrings(formatName)...)
+
+	return outLines
 }
 
-// NativeType holds key-value attributes specific to one language or implementation.
-type NativeType map[string]string
+// PathList keeps a list of path string elements that form a unique identifier for a TypeElement.
+// - PathList behaves like a stack with Push/Pop operators.
+type PathList struct {
+	paths []string
+}
+
+func NewPathList() *PathList {
+	return &PathList{paths: make([]string, 0)}
+}
+
+func (p *PathList) Len() int {
+	return len(p.paths)
+}
+
+func (p *PathList) Push(elem string) {
+	// Ignore empty elements.
+	if elem == "" {
+		return
+	}
+	p.paths = append(p.paths, elem)
+}
+
+func (p *PathList) Pop() string {
+	if len(p.paths) == 0 {
+		return ""
+	}
+
+	elem := p.paths[len(p.paths)-1]
+	p.paths = p.paths[:len(p.paths)-1]
+	return elem
+}
+
+func (p *PathList) Copy() *PathList {
+	n := &PathList{paths: make([]string, len(p.paths))}
+	copy(n.paths, p.paths)
+	return n
+}
+
+func (p *PathList) String() string {
+	out := make([]string, len(p.paths))
+	for i, s := range p.paths {
+		if strings.Contains(s, ".") {
+			s = fmt.Sprintf("%q", s)
+		}
+		out[i] = s
+	}
+	return strings.Join(out, ".")
+}
+
+// NativeOption stores options as key-value pairs but returns a list of strings.
+// - Value-only entries are unique by value.
+// - Values with keys are unique by key.
+type NativeOption struct {
+	optionMap map[string]string
+}
+
+func NewNativeOption() *NativeOption {
+	return &NativeOption{
+		optionMap: make(map[string]string),
+	}
+}
+
+// Equals returns true if both NativeOption struct have the same values.
+func (n *NativeOption) Equals(other *NativeOption) bool {
+	if n == nil && other == nil {
+		// Both are nil so equal.
+		return true
+	}
+
+	// Treat nil option map as zero-length.
+	var thisLen, otherLen int
+	if n != nil && n.optionMap != nil {
+		thisLen = len(n.optionMap)
+	}
+	if other != nil && other.optionMap != nil {
+		otherLen = len(other.optionMap)
+	}
+
+	if thisLen != otherLen {
+		return false
+	} else if thisLen == 0 {
+		return true
+	}
+
+	return reflect.DeepEqual(n.optionMap, n.optionMap)
+}
+
+// AsList returns options as a slice of strings.
+func (n *NativeOption) AsList() []string {
+	// Return empty slice if no options are set.
+	if len(n.optionMap) == 0 {
+		return make([]string, 0)
+	}
+
+	s := make([]string, len(n.optionMap))
+	i := 0
+	for k, v := range n.optionMap {
+		if v == "" {
+			//	Value only
+			s[i] = k
+		} else {
+			// Key-Value pair
+			s[i] = fmt.Sprintf("%s=%s", k, v)
+		}
+		i++
+	}
+
+	// Sort slice for output.
+	sort.Strings(s)
+	return s
+}
+
+// AddVal adds an option value string.
+func (n *NativeOption) AddVal(val string) {
+	// Ignore if value is empty.
+	if val == "" {
+		return
+	}
+	n.optionMap[val] = ""
+}
+
+// Delete removes an entry from the option map.
+// - key will match either key-value pairs or value-only settings.
+func (n *NativeOption) Delete(key string) {
+	// Ignore empty key.
+	if key == "" {
+		return
+	}
+	delete(n.optionMap, key)
+}
+
+// AddKeyVal adds an option string key=val
+func (n *NativeOption) AddKeyVal(key, val string) {
+	// Ignore if key is empty.
+	if key == "" {
+		return
+	}
+
+	// If value is empty, delete key.
+	if val == "" {
+		n.Delete(key)
+		return
+	}
+
+	// Set value.
+	n.optionMap[key] = val
+}
+
+// AddBool adds a boolean as an option string.
+// - key is required
+//   - if key is empty, nothing is added
+// - val is boolean value
+func (n *NativeOption) AddBool(key string, val bool) {
+	// Ignore if key is missing.
+	if key == "" {
+		return
+	}
+
+	n.optionMap[key] = fmt.Sprintf("%t", val)
+}
+
+// AddThreeFlag adds a ThreeFlag value as a string.
+// - key is required
+//   - if key is empty, nothing is added
+// - val is ThreeFlag value
+func (n *NativeOption) AddThreeFlag(key string, val threeflag.ThreeFlag) {
+	// Ignore if key is missing.
+	if key == "" {
+		return
+	}
+
+	n.optionMap[key] = val.String()
+}
+
+// UpdateFrom updates with values from another NativeOption.
+func (n *NativeOption) UpdateFrom(other *NativeOption) {
+	for k, v := range other.optionMap {
+		n.optionMap[k] = v
+	}
+}
+
+// Copy makes a copy of the NativeOption.
+func (n *NativeOption) Copy() *NativeOption {
+	c := NewNativeOption()
+
+	for k, v := range n.optionMap {
+		c.optionMap[k] = v
+	}
+
+	return c
+}
+
+// NativeType holds key-value attributes specific to one dialect.
+// - A dialect is the name of a language (e.g. golang) or implementation (e.g. json-schema)
+type NativeType struct {
+	// Name of language of dialect represented by NativeType.
+	Dialect string
+
+	// Name of element if different from generic Name.
+	Name string
+
+	// Native type of element if different from the generic Type.
+	Type string
+
+	// TypeRef holds the native name of a type if different from the generic TypeRef.
+	TypeRef string
+
+	// Include indicates whether an element should be included in output for a dialect.
+	// Include has three value values:
+	// - "" (empty string) means value is not set
+	// - "yes" = include element in output
+	// - "no" = exclude element from output
+	Include threeflag.ThreeFlag
+
+	// Options contains a list of strings representing dialect-specific options.
+	// - Format is one of:
+	//   - "value"
+	//   - "key=value"
+	Options *NativeOption
+
+	// Capture error if element cannot reflect.
+	Error string
+}
+
+// NewNativeType initializes a new NativeType with default settings.
+func NewNativeType(dialect string) *NativeType {
+	n := &NativeType{
+		// Default to the native dialect.
+		Dialect: dialect,
+
+		// Include fields by default.
+		Include: threeflag.True,
+
+		// Empty options list.
+		Options: NewNativeOption(),
+	}
+
+	return n
+}
+
+// UpdateFromTag sets NativeType fields from a StructFieldTag.
+func (n *NativeType) UpdateFromTag(t *StructFieldTag) {
+	if t == nil {
+		return
+	}
+
+	if t.Ignore {
+		n.Include = threeflag.False
+	}
+
+	if t.Alias != "" {
+		n.Name = t.Alias
+	}
+
+	n.Options.UpdateFrom(t.Options)
+}
+
+// AsMap returns a map[string]string representation of the NativeType struct.
+func (n *NativeType) AsMap() map[string]string {
+	m := map[string]string{}
+
+	if n.Include != threeflag.Undefined {
+		m["Include"] = n.Include.String()
+	}
+	if n.Name != "" {
+		m["Name"] = n.Name
+	}
+	if n.Type != "" {
+		m["Type"] = n.Type
+	}
+	if n.TypeRef != "" {
+		m["TypeRef"] = n.TypeRef
+	}
+	if n.Error != "" {
+		m["Error"] = n.Error
+	}
+
+	for i, s := range n.Options.AsList() {
+		k := fmt.Sprintf("Options[%03d]", i)
+		m[k] = s
+	}
+
+	return m
+}
+
+// Copy makes a copy of a NativeType.
+func (n *NativeType) Copy() *NativeType {
+	c := &NativeType{
+		Dialect: n.Dialect,
+		Name:    n.Name,
+		Type:    n.Type,
+		TypeRef: n.TypeRef,
+		Include: n.Include,
+		Options: n.Options.Copy(),
+		Error:   n.Error,
+	}
+
+	return c
+}
 
 // TypeList holds a slice of TypeElements.
-type TypeList []*TypeElement
+// - Behavior is similar to a stack with Push/Pop methods to add/remove elements from the end
+type TypeList struct {
+	types []*TypeElement
+}
 
-// String builds a default string representation of a type list.
-func (typeList TypeList) String() string {
-	return typeList.BuildString("")
+func NewTypeList() *TypeList {
+	// Initialize an empty TypeList.
+	return &TypeList{
+		types: make([]*TypeElement, 0),
+	}
+}
+
+// Len returns the number of elements in the TypeList.
+func (typeList *TypeList) Len() int {
+	return len(typeList.types)
+}
+
+// Push adds an element to the list.
+func (typeList *TypeList) Push(elem *TypeElement) {
+	typeList.types = append(typeList.types, elem)
+}
+
+// Pop removes the last element from the list an returns it.
+// - Returns nil is list is empty.
+func (typeList *TypeList) Pop() *TypeElement {
+	if len(typeList.types) > 0 {
+		lastElem := typeList.types[len(typeList.types)-1]
+		typeList.types = typeList.types[:len(typeList.types)-1]
+
+		return lastElem
+	}
+
+	// Empty list.
+	return nil
+}
+
+// Copy makes a copy of the current TypeList.
+// - Parent is set if parentElem is not nil.
+func (typeList *TypeList) Copy(parentElem *TypeElement) *TypeList {
+	c := NewTypeList()
+
+	// Copy all elements to new list.
+	for _, elem := range typeList.types {
+		newElem := elem.Copy()
+		c.Push(newElem)
+
+		if parentElem != nil {
+			parentElem.AddChild(newElem)
+		}
+	}
+
+	return c
+}
+
+// Elements returns the internal slice of TypeElements.
+func (typeList *TypeList) Elements() []*TypeElement {
+	return typeList.types
 }
 
 // String builds a default string representation of a type list.
-func (typeList TypeList) BuildString(formatName string) string {
-	// Keep track of indents by parentID and element ID.
+func (typeList *TypeList) String() string {
+	return strings.Join(typeList.BuildStrings(""), "\n")
+}
+
+// String builds a default string representation of a type list.
+// Each line is built as: <prefix> <body>
+// - <prefix> is the same for all lines with the same ParentID
+// - <body> is different for each line
+//
+// All output lines are collected before being output.
+// - Maximum <prefix> length is determined for each ParentID.
+// - Final output lines are built using the same field width for <prefix> for each ParentID.
+func (typeList *TypeList) BuildStrings(formatName string) []string {
+	outLines := []string{}
+
+	// Temporary holder for each output line.
+	type outputLine struct {
+		parentID int
+		prefix   string
+		body     string
+	}
+
+	// Map ID to ParentID to ensure that every indent is larger than its parent.
+	parentMap := map[int]int{}
+
+	// Keep track of max prefix length by ParentID.
+	maxParentPrefixLen := map[int]int{}
+
+	// Keep track of indents by parent and element ID.
 	indentLevel := 1
 	lastParentID := 0
 
-	parentIndents := map[int]string{}
-	elemIndents := map[int]string{}
-	var parentIndent, elemIndent string
+	// Indent level by ParentID
+	indentLevels := map[int]int{lastParentID: indentLevel}
 
-	var indent, otherIndent string
-	var indents []string
+	// Build output tempLines.
+	tempLines := []*outputLine{}
 
-	var prefix, otherPrefix string
-	var prefixes []string
+	for _, currentElem := range typeList.Elements() {
+		// Map ID to ParentID.
+		parentMap[currentElem.ID] = currentElem.ParentID()
 
-	// Set formatting options.
-	printLabel := true
-	quoteIndent := false
-	commaIndent := false
+		// Build path list to determine indent.
+		pathList := currentElem.Path()
 
-	switch formatName {
-	case "json-list":
-		printLabel = false
-		quoteIndent = true
-		commaIndent = true
-
-		parentIndents[lastParentID] = "$"
-		elemIndents[lastParentID] = "$"
-	default:
-		parentIndents[lastParentID] = strings.Repeat(".", 2*indentLevel)
-	}
-
-	// Build output lines.
-	lines := []string{}
-
-	// Indent based on parent ID.
-	parentsSeen := map[int]int{lastParentID: indentLevel}
-
-	for _, t := range typeList {
-		// Detect when parent changes.
-		if t.ParentID != lastParentID {
+		if currentElem.ParentID() != lastParentID {
 			// Parent ID changed.
-			if parentsSeen[t.ParentID] > 0 {
+			if indentLevels[currentElem.ParentID()] > 0 {
 				// Already seen so moving back up the stack.
-				indentLevel = parentsSeen[t.ParentID]
-				parentIndent = parentIndents[t.ParentID]
-				elemIndent = elemIndents[t.ID]
+				indentLevel = indentLevels[currentElem.ParentID()]
 			} else {
 				indentLevel++
-				parentsSeen[t.ParentID] = indentLevel
-
-				parentIndent = ""
-				elemIndent = ""
+				indentLevels[currentElem.ParentID()] = indentLevel
 			}
 		}
 
-		if printLabel {
-			// Prefix 1st line with Label, other lines with " "
-			if t.Label != "" {
-				prefix = fmt.Sprintf("%q", t.Label)
-				otherPrefix = strings.Repeat(" ", len(prefix))
-				prefixes = []string{
-					prefix,
-					otherPrefix,
-				}
-			}
-		}
+		// Initialize a new output line.
+		newLine := &outputLine{parentID: currentElem.ParentID()}
 
 		// Build indent strings based on format name.
-		if elemIndent == "" {
-			switch formatName {
-			case "json-list":
-				// Get the parent indent from the parent element.
-				parentIndent = elemIndents[t.ParentID]
+		if PathPrefix {
+			newLine.prefix = pathList.String()
+		} else {
+			newLine.prefix = strings.Repeat(".", 2*pathList.Len())
+		}
 
-				// Indent with JSON path
-				jsonAlias := t.Alias("json")
-				if jsonAlias != "" {
-					//	Add current ref to parent path.
-					elemIndent = parentIndent + "." + jsonAlias
-				} else {
-					elemIndent = parentIndent
-				}
+		// Update max lengths for parent.
+		if len(newLine.prefix) > maxParentPrefixLen[currentElem.ParentID()] {
+			maxParentPrefixLen[currentElem.ParentID()] = len(newLine.prefix)
+		}
 
-				if t.Type == "list" {
-					elemIndent = elemIndent + "[]"
-				}
-			default:
-				parentIndent = strings.Repeat(".", 2*indentLevel)
-				parentIndents[t.ParentID] = parentIndent
-
-				elemIndent = parentIndent
+		for _, b := range currentElem.BuildStrings(formatName) {
+			// Make a new line using fields from newLine.
+			bodyLine := &outputLine{
+				parentID: newLine.parentID,
+				prefix:   newLine.prefix,
+				body:     b,
 			}
-
-			parentIndents[t.ParentID] = parentIndent
-			elemIndents[t.ID] = elemIndent
-		}
-
-		indent = elemIndent
-		if quoteIndent {
-			indent = fmt.Sprintf("%q", indent)
-		}
-		if commaIndent {
-			indent += ","
-		}
-		otherIndent = strings.Repeat(" ", len(indent))
-
-		indents = []string{indent, otherIndent}
-
-		addLine := true
-		switch formatName {
-		case "json-list":
-			addLine = false
-			if t.Err == "" && t.IsBasicType() && t.IsExported() {
-				if strings.HasSuffix(elemIndent, "[]") {
-					addLine = true
-				} else if t.Alias("json") != "" {
-					addLine = true
-				}
-			}
-		}
-
-		if addLine {
-			lines = append(lines, fmt.Sprintf("%s", util.BlockIndent(t.BuildString(formatName), prefixes, indents)))
+			tempLines = append(tempLines, bodyLine)
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	// Build all lines and add to output.
+	for _, temp := range tempLines {
+		outLines = append(outLines, temp.body)
+	}
+
+	//// Fix indents so that each element indent is 2 longer than its parent's parent.
+	//for _, parent := range parentMap {
+	//	parent2 := parentMap[parent]
+	//	if maxParentPrefixLen[parent] <= maxParentPrefixLen[parent2] {
+	//		maxParentPrefixLen[parent] = maxParentPrefixLen[parent2] + 2
+	//	}
+	//}
+	//
+	//// Build list of strings using max lengths.
+	//lines := []string{}
+	//for _, currentElem := range tempLines {
+	//	prefixLen := maxParentPrefixLen[currentElem.parent]
+	//
+	//	newLine := fmt.Sprintf("%-*s >>> %s",
+	//		prefixLen, currentElem.prefix,
+	//		currentElem.body)
+	//
+	//	lines = append(lines, newLine)
+	//}
+
+	return outLines
+}
+
+// TypeRefs holds type references by name.
+// - A type reference is a named list of TypeElements.
+type TypeRefs struct {
+	refs map[string]*TypeElement
+}
+
+// NewTypeRefs initializes a new TypeRefs map.
+func NewTypeRefs() *TypeRefs {
+	return &TypeRefs{refs: map[string]*TypeElement{}}
+}
+
+// Get returns the TypeList associated with the reference type name.
+func (r *TypeRefs) Get(refName string) *TypeElement {
+	return r.refs[refName]
+}
+
+// Contains returns true if the refName exists in the TypeRefs map.
+func (r *TypeRefs) Contains(refName string) bool {
+	return r.refs[refName] != nil
+}
+
+// Add adds a new type reference to the map.
+func (r *TypeRefs) Add(refName string, refElem *TypeElement) {
+	// Ignore empty names.
+	if refName == "" {
+		return
+	}
+
+	// Ignore empty type list.
+	if refElem == nil {
+		return
+	}
+
+	r.refs[refName] = refElem
+}
+
+// Keys returns a sorted list of TypeRef names.
+func (r *TypeRefs) Keys() []string {
+	if len(r.refs) == 0 {
+		return []string{}
+	}
+
+	out := make([]string, len(r.refs))
+	i := 0
+	for k, _ := range r.refs {
+		out[i] = k
+		i++
+	}
+
+	sort.Strings(out)
+	return out
 }
 
 // TypeResult is the result of parsing types.
 type TypeResult struct {
-	// Types is a list of types in the order found.
-	Types TypeList
+	// Root is a list of types in the order found.
+	Root *TypeElement
 
-	// TypeRefs holds a map of named types by name.
-	TypeRefs map[string]TypeList
-}
-
-// SortedTypeNames returns an alphabetically sorted list of type names.
-func (t *TypeResult) SortedTypeNames() []string {
-	names := make([]string, len(t.TypeRefs))
-
-	i := 0
-	for k, _ := range t.TypeRefs {
-		names[i] = k
-		i++
-	}
-	sort.Strings(names)
-	return names
+	// Refs holds a map of named types by name.
+	Refs *TypeRefs
 }
 
 // String builds a default string representation of a type result.
-func (typeResult *TypeResult) String() string {
-	return typeResult.BuildString("")
+// - Each line starts with 3 comma-delimited values: <prefix>,<id>,<parent>
+// - Each parent level has all prefixes with the same width.
+func (typeResult *TypeResult) String(formatName string) string {
+	// Keep track of max prefix length by parent ID.
+	maxParentLen := map[string]int{}
+
+	// Keep map from ID --> ParentID. Every parent indent must be larger than its parent indent.
+	idMap := map[string]string{}
+
+	// Keep lines parts in a struct.
+	type lineTokens struct {
+		prefix string
+		id     string
+		parent string
+		other  string
+	}
+
+	// Iterate through strings to determine max lengths for each parent level.
+	outputLines := []*lineTokens{}
+	for _, line := range typeResult.BuildStrings(formatName) {
+		// Split line into prefix,id,parent,other
+		tokens := strings.SplitN(line, ",", 4)
+
+		if len(tokens) != 4 {
+			// Some other line type. Just add everything in other.
+			outputLines = append(outputLines, &lineTokens{other: line})
+		} else {
+			newLine := &lineTokens{
+				prefix: tokens[0],
+				id:     tokens[1],
+				parent: tokens[2],
+				other:  tokens[3],
+			}
+			outputLines = append(outputLines, newLine)
+
+			// Update map from id --> parent
+			idMap[newLine.id] = newLine.parent
+
+			// Update max length for parent level.
+			if len(newLine.prefix) > maxParentLen[newLine.parent] {
+				maxParentLen[newLine.parent] = len(newLine.prefix)
+			}
+		}
+	}
+
+	// Make a pass to ensure that each parent indent is at least 2 larger than its parent.
+	for parent, indent := range maxParentLen {
+		parentParent := idMap[parent]
+		if parentParent != "" {
+			if maxParentLen[parentParent]+2 > indent {
+				maxParentLen[parent] = maxParentLen[parentParent] + 2
+			}
+		}
+	}
+
+	// Build output using lengths.
+	out := []string{}
+	for _, line := range outputLines {
+		var newLine string
+		if line.prefix == "" && line.id == "" && line.parent == "" {
+			newLine = line.other
+		} else {
+			newLine = fmt.Sprintf("%-*s >>> %s,%s,%s",
+				maxParentLen[line.parent], line.prefix, line.id, line.parent, line.other)
+		}
+		out = append(out, newLine)
+	}
+
+	return strings.Join(out, "\n")
 }
 
 // BuildString builds a string representation of a type result using the given formatName.
-func (typeResult *TypeResult) BuildString(formatName string) string {
+func (typeResult *TypeResult) BuildStrings(formatName string) []string {
 	// Set formatting options.
 	printHeaders := true
 	printTypeRefs := true
 
-	switch formatName {
-	case "json-list":
-		printHeaders = false
-		printTypeRefs = false
-	}
-
-	// Build output lines.
-	lines := []string{}
+	// Build output outLines.
+	outLines := []string{}
 
 	// Print type refs.
 	if printTypeRefs {
-		refNames := typeResult.SortedTypeNames()
+		refNames := typeResult.Refs.Keys()
 		for _, typeName := range refNames {
 			if printHeaders {
-				lines = append(lines, fmt.Sprintf("*** TypeRef: %s", typeName))
+				outLines = append(outLines, fmt.Sprintf("*** TypeRef: %s", typeName))
 			}
-			lines = append(lines, typeResult.TypeRefs[typeName].BuildString(formatName))
+			outLines = append(outLines, typeResult.Refs.Get(typeName).BuildStrings(formatName)...)
 		}
 	}
 
 	//	Print types.
 	if printHeaders {
-		lines = append(lines, fmt.Sprintf("*** Types"))
+		outLines = append(outLines, fmt.Sprintf("*** Types"))
 	}
-	lines = append(lines, typeResult.Types.BuildString(formatName))
+	outLines = append(outLines, typeResult.Root.BuildStrings(formatName)...)
 
 	//	Return final string.
-	return strings.Join(lines, "\n")
+	return outLines
 }
 
-func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList, a AncestorList, v reflect.Value, s *reflect.StructField, parentErr string) TypeList {
-	currentElem := NewTypeElement(r.nextID(), parentID, name, r.Label)
-	currentElem.Err = ""
-
-	// Append current element to master type list.
-	typeList = append(typeList, currentElem)
+// reflectTypeImpl is a recursive function to reflect Go values.
+//
+// Args:
+// - typeList (TypeList): list of TypeElement found so far
+// - ancestoreTypeRef (AncestorTypeRef): keeps track of TypeRef names seen so far, used for cycle detection
+// - currentElem (*TypeElement): current TypeElement, must be initialized in caller!
+// - v (reflect.Value): Value of current element
+// - s (*reflect.StructField): pointer to StructField for current element if part of a struct
+//
+// Returns:
+// - TypeList: list of TypeElement after reflection
+func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem *TypeElement, v reflect.Value, s *reflect.StructField) {
+	// currentElem must be initialized in caller!!!
+	if currentElem == nil {
+		panic("currentElem cannot be nil")
+	}
 
 	// Create temporary list for named type refs.
-	refList := TypeList{currentElem}
+	refList := NewTypeList()
+	refList.Push(currentElem)
 
 	// Capture native golang features.
-	native := make(NativeType)
-	currentElem.Native["golang"] = native
+	native := currentElem.NativeDefault()
+	native.Options.AddKeyVal("Kind", v.Kind().String())
 
-	// Check for unsupported types. These do not support many functions without panic.
-	switch v.Kind() {
-	case reflect.Invalid, reflect.Uintptr, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		currentElem.Type = "invalid"
-		currentElem.Err = fmt.Sprintf("value.Kind %q not supported", v.Kind())
+	// Get generic type for value.
+	genericType := generictype.GenericTypeOf(v)
+	currentElem.Type = genericType.String()
 
-		native["Kind"] = v.Kind().String()
-
-		return typeList
+	// Check for invalid types first. These may panic on some operations so we exit quickly with minimal reflection.
+	if genericType.Category() == typecategory.Invalid {
+		currentElem.Error = InvalidKindErr
+		return
 	}
 
-	// Capture native features from type.
-	currentElem = r.reflectGolangType(v.Type(), currentElem)
+	// Capture Go-specific attributes common to all types.
+	native.Options.AddBool("IsZero", v.IsZero())
+	native.Options.AddBool("IsValid", v.IsValid())
+	native.Options.AddThreeFlag("IsNil", threeflag.Undefined)
+	native.Type = v.Kind().String()
+	native.Options.AddKeyVal("Type.Name", v.Type().Name())
+	native.Options.AddKeyVal("Type.Kind", v.Type().Kind().String())
 
-	// Check cyclical references.
-	if a.Has(currentElem.TypeRef) {
-		currentElem.Err = fmt.Sprintf("cyclical reference: %s", currentElem.TypeRef)
-		return typeList
+	// If type.Name differs from type.Kind, element is a TypeRef.
+	if v.Type().Name() != v.Type().Kind().String() {
+		currentElem.TypeRef = v.Type().Name()
+
+		native.TypeRef = currentElem.TypeRef
+		native.Options.AddKeyVal("TypeRef", currentElem.TypeRef)
+
+		// Check for cyclical references.
+		if ancestorTypeRef.Contains(currentElem.TypeRef) {
+			currentElem.Error = CyclicalReferenceErr
+			return
+		}
+		ancestorTypeRef.Add(currentElem.TypeRef)
 	}
-	a.Add(currentElem.TypeRef)
-
-	native["IsZero"] = util.ValueIfTrue(v.IsZero(), "z", "-")
-	native["IsValid"] = util.ValueIfTrue(v.IsValid(), "value", "-")
-	native["IsNil"] = "-"
 
 	// Handle un-exported struct fields.
-	var vValue interface{}
 	if s != nil && s.PkgPath != "" {
-		native["PkgPath"] = s.PkgPath
-	} else {
-		vValue = v.Interface()
+		// Field is not exported and should generally be excluded from output.
+		native.Options.AddKeyVal("PkgPath", s.PkgPath)
+		currentElem.NativeDefault().Include = threeflag.False
 	}
 
 	// Parse struct tags.
@@ -437,149 +1026,284 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 		tags := ParseTags(s.Tag)
 		if len(tags) > 0 {
 			for tagName, tagVal := range tags {
-				tagMap := tagVal.AsMap()
-				if tagMap != nil {
-					tempNative := currentElem.Native[tagName]
-					if tempNative == nil {
-						// Set new native block.
-						currentElem.Native[tagName] = tagMap
-					} else {
-						// Copy from tagMap into existing block.
-						for k, v := range tagMap {
-							tempNative[k] = v
-						}
-					}
+				tempNative := currentElem.Native[tagName]
+				if tempNative == nil {
+					tempNative = NewNativeType(tagName)
+					currentElem.Native[tagName] = tempNative
 				}
+				tempNative.UpdateFromTag(tagVal)
 			}
 		}
 	}
 
-	// Implement special JSON parsing rules.
-	if ParseAsJSON {
-		if s == nil || s.PkgPath == "" {
-			exportName := util.Capitalize(name)
-			if exportName != name {
-				// Use exportName as element name and save unexported name as JSON Alias.
-				currentElem.Name = exportName
-			}
+	// Capture attributes that differ by type.
+	switch genericType.Category() {
+	case typecategory.Basic:
+		// Basic types are already handled by the default operations above. Nothing else to do here.
+	case typecategory.Compound:
+		// Compound types are reflected in their own functions. Capture ref list for processing below.
+		if genericType == generictype.List {
+			r.reflectTypeListImpl(ancestorTypeRef, currentElem, v, s)
+		} else if genericType == generictype.Struct {
+			r.reflectTypeStructImpl(ancestorTypeRef, currentElem, v, s)
 		}
-	}
 
-	// TODO: ignore vValue for now
-	_ = vValue
-
-	// Get features that vary by value.Kind
-	switch v.Kind() {
-	// string, integer, float, and boolean are simple types with no children.
-	case reflect.String:
-		currentElem.Type = "string"
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		currentElem.Type = "integer"
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		currentElem.Type = "integer"
-	case reflect.Float32, reflect.Float64:
-		currentElem.Type = "float"
-	case reflect.Bool:
-		currentElem.Type = "boolean"
-
-	case reflect.Interface:
-		currentElem.Type = "interface"
-
+	case typecategory.Interface:
+		// Interface is a special case which is either:
+		// - nil -- nil has no discernable type and is an error
+		// - a wrapper around another type -- ignore the interface and continue reflection with the wrapped type
 		if v.IsZero() {
-			// Zero value for interface means nil.
+			// nil is an invalid element because its type cannot be determined
 			currentElem.Type = "invalid"
-			currentElem.Err = fmt.Sprintf("interface element is nil")
+			currentElem.Error = NilInterfaceErr
+			return
 		} else {
-			// Non-Zero interface is just an extra layer of abstraction around a real type.
-			// Remove interface from typeList and reflect child element.
-			typeList = typeList[:len(typeList)-1]
-			typeList = r.reflectTypeImpl(parentID, name, typeList, a.Copy(), v.Elem(), nil, parentErr)
+			// Non-Zero interface is just an extra layer of abstraction around ancestorTypeRef real type.
+			// Reuse the current element in order to "skip" the interface element.
+			r.reflectTypeImpl(ancestorTypeRef.Copy(), currentElem, v.Elem(), nil)
 		}
 
-	// Pointer is an intermediate type that has no value and points to one child.
-	case reflect.Ptr:
-		currentElem.Type = "pointer"
-		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
+	case typecategory.Pointer:
+		// Pointer is a memory address pointing to some other type element.
+		native.Options.AddBool("IsNil", v.IsNil())
 
-		if currentElem.Err == "" {
+		if currentElem.Error == "" {
 			// Get target of pointer.
 			var targetValue reflect.Value
 			if v.IsNil() {
-				// Create a new value if pointer is nil.
+				// Create ancestorTypeRef new value if pointer is nil.
 				targetValue = reflect.New(v.Type().Elem()).Elem()
 			} else {
 				// Use existing value for valid pointer.
 				targetValue = v.Elem()
 			}
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, "")
+
+			nextElem := currentElem.NewChild("")
+			r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
 		}
 
-	// Array and Slice represent lists of elements.
-	// - 1st element of list will be used to determine element type
-	// - If list is empty, a one-element list will be created to use for typing.
+	default:
+		// This should never happen!!! Just break the chain.
+		panic(fmt.Sprintf("unexpected type category %q", genericType.Category()))
+	}
+
+	// If current element is ancestorTypeRef named type, add to typeRefs.
+	r.addTypeRef(currentElem)
+
+	// Add reference list if DeReference or current element is not a TypeRef.
+	// - 1st element is already added so only add when there is more than 1 element in reference list.
+	// - When DeReference is true, keep the last TypeRef if the last element is a TypeRef. This indicates a cyclical relationship.
+	//if refList.Len() > 1 {
+	//	if DeReference || currentElem.NativeDefault().TypeRef == "" {
+	//		// Remove all TypeRefs except the last one when DeReference is true.
+	//		var lastElem *TypeElement
+	//		var lastTypeRef string
+	//
+	//		// Only add refList if it is ancestorTypeRef compound type.
+	//		for _, newElem := range refList.Elements()[1:] {
+	//			lastElem = newElem
+	//			lastTypeRef = lastElem.NativeDefault().TypeRef
+	//
+	//			if DeReference {
+	//				newElem.TypeRef = ""
+	//			}
+	//
+	//			typeList.Push(newElem)
+	//		}
+	//
+	//		// Restore the TypeRef on the last element
+	//		lastElem.TypeRef = lastTypeRef
+	//	}
+	//}
+}
+
+// addTypeRef adds a TypeRef for the current element.
+// - This function should only be called on an element with a TypeRef.
+func (r *Reflector) addTypeRef(currentElem *TypeElement) {
+	// Do nothing if the current element is not a TypeRef.
+	if currentElem.NativeDefault().TypeRef == "" {
+		return
+	}
+
+	// Skip if the TypeRef has already been captured.
+	if r.typeResult.Refs.Get(currentElem.NativeDefault().TypeRef) != nil {
+		return
+	}
+
+	refElem := currentElem.Copy()
+
+	// The first element of a type ref does is not a type ref.
+	refElem.Name = currentElem.NativeDefault().TypeRef
+	refElem.TypeRef = ""
+	refElem.NativeDefault().TypeRef = ""
+
+	r.typeRefRecursion(refElem)
+
+	refRoot := NewRootElement()
+	refRoot.AddChild(refElem)
+	r.typeResult.Refs.Add(currentElem.NativeDefault().TypeRef, refRoot)
+}
+
+// typeRefRecursion is an internal recursive function to handle nested TypeRefs.
+// - Recursively process elements.
+// - If TypeRef is found, process TypeRef then remove its children.
+func (r *Reflector) typeRefRecursion(currentElem *TypeElement) {
+	if currentElem.NativeDefault().TypeRef != "" {
+		// Add TypeRefs only if they are not cyclical errors.
+		if currentElem.Error != CyclicalReferenceErr {
+			r.addTypeRef(currentElem)
+			currentElem.RemoveAllChildren()
+		}
+
+		currentElem.Error = ""
+
+		return
+	}
+
+	// Keep current element and process children.
+	for _, childElem := range currentElem.Children.Elements() {
+		r.typeRefRecursion(childElem)
+	}
+}
+
+// reflectTypeListImpl refects on list types: Slice, Array
+// Array and Slice represent lists of elements.
+// - 1st element of list will be used to determine element type
+// - If list is empty, ancestorTypeRef one-element list will be created to use for typing.
+func (r *Reflector) reflectTypeListImpl(ancestorTypeRef AncestorTypeRef, currentElem *TypeElement, v reflect.Value, s *reflect.StructField) {
+	// Value for next reflect iteration.
+	var targetValue reflect.Value
+
+	// Keep track of whether list has elements.
+	listHasElements := false
+
+	// Count number of elements.
+	currentElem.Native[NATIVE_DIALECT].Options.AddKeyVal("Len", fmt.Sprintf("%d", v.Len()))
+
+	switch v.Kind() {
 	case reflect.Array:
-		currentElem.Type = "list"
-
-		if currentElem.Err == "" {
+		if currentElem.Error == "" {
 			//	Get kind of underlying elements.
-			var targetValue reflect.Value
-			if v.Len() > 0 {
-				targetValue = v.Index(0)
-			} else {
+			currentElem.Native[NATIVE_DIALECT].Options.AddKeyVal("Len", fmt.Sprintf("%d", v.Len()))
+			if v.Len() == 0 {
 				targetValue = reflect.New(v.Type().Elem()).Elem()
+			} else {
+				listHasElements = true
 			}
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), targetValue, nil, "")
 		}
+
+		nextElem := currentElem.NewChild("")
+		r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
 
 	case reflect.Slice:
-		currentElem.Type = "list"
-		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
+		currentElem.NativeDefault().Options.AddBool("IsNil", v.IsNil())
 
-		if currentElem.Err == "" {
+		if currentElem.Error == "" {
 			//	Get kind of underlying elements.
-			var sliceElem reflect.Value
 			if v.IsNil() || v.Len() == 0 {
-				sliceElem = reflect.MakeSlice(v.Type(), 1, 1).Index(0)
+				targetValue = reflect.MakeSlice(v.Type(), 1, 1).Index(0)
 			} else {
-				sliceElem = v.Index(0)
+				listHasElements = true
 			}
-
-			refList = r.reflectTypeImpl(currentElem.ID, "", refList, a.Copy(), sliceElem, nil, "")
 		}
 
-	// Struct and Map represent key-value pairs.
-	// - Struct keys are field names which are always strings.
-	// - Map keys can be any comprable Go type.
-	case reflect.Struct:
-		currentElem.Type = "struct"
+	default:
+		// All other types should be handled above.
+		panic(fmt.Sprintf("value.Kind %q is not a List type", v.Kind()))
+	}
 
-		if currentElem.Err == "" {
+	if listHasElements {
+		// Check all slice elements to verify that they are all the same kind.
+		kindsFound := map[string]int{}
+		childElem := []*TypeElement{}
+
+		for i := 0; i < v.Len(); i++ {
+			nextElem := NewTypeElement("")
+			childElem = append(childElem, nextElem)
+
+			targetValue = v.Index(i)
+			r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
+
+			kindsFound[nextElem.Type]++
+			if len(kindsFound) > 1 {
+				// If multiple types found, set error and exit.
+				currentElem.Error = SliceMultiTypeErr
+
+				// Build a string with type:count elements.
+				out := []string{}
+				for k, v := range kindsFound {
+					out = append(out, fmt.Sprintf("%s:%d", k, v))
+				}
+				currentElem.NativeDefault().Error = fmt.Sprintf("%s: %s", SliceMultiTypeErr, strings.Join(out, ","))
+				return
+			}
+		}
+
+		// All list elements have same type. Add first element as child of current element.
+		currentElem.AddChild(childElem[0])
+	} else {
+		// Iterate using target value.
+		nextElem := currentElem.NewChild("")
+		r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
+	}
+}
+
+// reflectTypeStructImpl reflects on struct types: Struct, Map
+// Struct and Map represent key-value pairs.
+// - Struct keys are field names which are always strings.
+// - Map keys can be any comprable Go type.
+func (r *Reflector) reflectTypeStructImpl(ancestorTypeRef AncestorTypeRef, currentElem *TypeElement, v reflect.Value, s *reflect.StructField) {
+	switch v.Kind() {
+	case reflect.Struct:
+		if currentElem.Error == "" {
+			if v.NumField() == 0 {
+				currentElem.Error = EmptyStructErr
+				return
+			}
+
+			// Count exported fields.
+			exportedFields := 0
+
 			for i := 0; i < v.NumField(); i++ {
 				structField := v.Type().Field(i)
 				targetValue := v.Field(i)
 
-				refList = r.reflectTypeImpl(currentElem.ID, structField.Name, refList, a.Copy(), targetValue, &structField, "")
+				// Count exported fields.
+				if structField.PkgPath == "" {
+					exportedFields++
+				}
+
+				nextElem := currentElem.NewChild(structField.Name)
+				r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, &structField)
+			}
+
+			if exportedFields == 0 {
+				currentElem.Error = NoExportedFieldsErr
+				return
 			}
 		}
 
 	case reflect.Map:
-		currentElem.Type = "struct"
-		native["IsNil"] = util.ValueIfTrue(v.IsNil(), "n", "-")
+		currentElem.Native[currentElem.NativeDialect].Options.AddBool("IsNil", v.IsNil())
 
-		if currentElem.Err == "" {
-			// Map key must be a string.
+		if currentElem.Error == "" {
+			// Map key must be ancestorTypeRef string.
 			if v.Type().Key().Kind() != reflect.String {
-				currentElem.Err = fmt.Sprintf("map key type %q not supported", v.Type().Key())
+				currentElem.Error = MapKeyTypeErr
+				currentElem.NativeDefault().Error = fmt.Sprintf("map key type must be string not %q", v.Type().Key())
+				return
 			}
 
 			// Empty map not allowed.
 			if v.Len() == 0 {
-				currentElem.Err = fmt.Sprintf("empty map not supported")
+				currentElem.Error = EmptyMapErr
+				return
 			}
 
 			// Iterate through map by keys in sorted order.
-			// - ExportName must be unique.
-			//   - If ParseAsJSON is true, ExportName is the capitalized Name
+			// - Assume that all map keys are exported fields which means they must be capitalized.
+			//   - Name is the original name of the map field.
+			//   - ExportName is the capitalized name fo the map field.
 			type mapKey struct {
 				Name       string
 				ExportName string
@@ -591,130 +1315,68 @@ func (r *Reflector) reflectTypeImpl(parentID int, name string, typeList TypeList
 					Name:  k.Interface().(string),
 					Value: k,
 				}
-				if ParseAsJSON {
-					newKey.ExportName = util.Capitalize(newKey.Name)
-				} else {
-					newKey.ExportName = newKey.Name
-				}
+				newKey.ExportName = util.Capitalize(newKey.Name)
 
 				keys = append(keys, newKey)
 			}
+
+			// Sort by ExportName then Name.
 			sort.Slice(keys, func(i, j int) bool {
-				if keys[i].ExportName == keys[j].ExportName {
-					return keys[i].Name < keys[j].Name
+				if keys[i].ExportName != keys[j].ExportName {
+					return keys[i].ExportName < keys[j].ExportName
 				}
-				return keys[i].ExportName < keys[j].ExportName
+				return keys[i].Name < keys[j].Name
 			})
 
 			uniqKeys := map[string]int{}
 			for _, k := range keys {
-				mapKeyName := k.Name
 				mapValue := v.MapIndex(k.Value)
 
-				var duplicateErr string
+				nextElem := currentElem.NewChild(k.ExportName)
+				if k.ExportName != k.Name {
+					// Use original Name for native defaults.
+					nextElem.NativeDefault().Name = k.Name
+				}
+
+				// Check for duplicate ExportName
 				if uniqKeys[k.ExportName] > 0 {
-					duplicateErr = fmt.Sprintf("duplicate map key %q (%q)", k.ExportName, k.Name)
+					nextElem.Error = DuplicateMapKeyErr
+					nextElem.NativeDefault().Error = fmt.Sprintf("duplicate map key %q (%q)", k.ExportName, k.Name)
 				}
 				uniqKeys[k.ExportName]++
 
-				refList = r.reflectTypeImpl(currentElem.ID, mapKeyName, refList, a.Copy(), mapValue, nil, duplicateErr)
+				r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, mapValue, nil)
 			}
 		}
-
-	default:
-		// All other types should be handled in the unsupported check above.
-		panic(fmt.Sprintf("value.Kind %q not supported", v.Kind()))
 	}
-
-	// If current element is a named type, add to typeRefs.
-	if currentElem.TypeRef != "" {
-		if r.typeResult.TypeRefs[currentElem.TypeRef] == nil {
-			// Copy all elements with new IDs and no errors.
-			// - Stop at the 2nd element that is a TypeRef.
-			newList := make(TypeList, 0)
-			for i, listItem := range refList {
-				newItem := listItem.Copy()
-				newItem.ID = r.nextID()
-				newItem.Err = ""
-				if i == 0 {
-					newItem.Name = ""
-				}
-
-				newList = append(newList, newItem)
-
-				//	Stop on the 2nd element with a RefType
-				if i > 0 && newItem.TypeRef != "" {
-					break
-				}
-			}
-
-			r.typeResult.TypeRefs[currentElem.TypeRef] = newList
-		}
-	}
-
-	if len(refList) > 1 {
-		if NoRefs || currentElem.TypeRef == "" {
-			// Only add refList if it is a compound type.
-			typeList = append(typeList, refList[1:]...)
-		}
-	}
-
-	return typeList
 }
 
-// reflectGolangType parses native features for Go.
-func (r *Reflector) reflectGolangType(t reflect.Type, currentElem *TypeElement) *TypeElement {
-	// Initialize nil variables.
-	if currentElem == nil {
-		currentElem = NewTypeElement(0, 0, "", "")
-	}
-
-	native := currentElem.Native["golang"]
-	if native == nil {
-		native = make(NativeType)
-		currentElem.Native["golang"] = native
-	}
-
-	// Type AName is the name of a type if any.
-	if t.Name() != t.Kind().String() {
-		currentElem.TypeRef = t.Name()
-	}
-
-	// Capture native features.
-	native["Kind"] = t.Kind().String()
-	native["Type"] = t.String()
-	native["Type.AName"] = t.Name()
-	native["Type.Kind"] = t.Kind().String()
-
-	return currentElem
-}
-
-// AncestorList keeps track of type references that are ancestors of the current element.
+// AncestorTypeRef keeps track of type references that are ancestors of the current element.
 // - Stores a count of references found.
 // - If count > 1, a cyclical reference exists.
-type AncestorList map[string]int
+type AncestorTypeRef map[string]int
 
-// NewAncestorList initializes a new ancestor list.
-func NewAncestorList() AncestorList {
-	return make(AncestorList)
+// NewAncestorTypeRef initializes a new ancestor list.
+func NewAncestorTypeRef() AncestorTypeRef {
+	return make(AncestorTypeRef)
 }
 
 // Copy makes a copy of the ancestor list.
-func (a AncestorList) Copy() AncestorList {
-	n := make(AncestorList)
+func (a AncestorTypeRef) Copy() AncestorTypeRef {
+	n := make(AncestorTypeRef)
 	for k, v := range a {
 		n[k] = v
 	}
 	return n
 }
 
-// Has returns true if the key exists in ancestor list.
-func (a AncestorList) Has(key string) bool {
+// Contains returns true if the key exists in ancestor list.
+func (a AncestorTypeRef) Contains(key string) bool {
 	return a[key] > 0
 }
 
 // Add adds a reference count to the ancestor list.
-func (a AncestorList) Add(key string) int {
+func (a AncestorTypeRef) Add(key string) int {
 	if key == "" {
 		return 0
 	}

@@ -47,12 +47,12 @@ func TestNewStructFieldTag(t *testing.T) {
 		{
 			name:    "alias, options",
 			tag:     `"abc,def,ghi"`,
-			wantTag: &StructFieldTag{Alias: "abc", Options: "def,ghi"},
+			wantTag: &StructFieldTag{Alias: "abc", Options: &NativeOption{optionMap: map[string]string{"def": "", "ghi": ""}}},
 		},
 		{
 			name:    "comma, options",
 			tag:     `",def,ghi"`,
-			wantTag: &StructFieldTag{Options: "def,ghi"},
+			wantTag: &StructFieldTag{Options: &NativeOption{optionMap: map[string]string{"def": "", "ghi": ""}}},
 		},
 	}
 
@@ -60,8 +60,8 @@ func TestNewStructFieldTag(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gotTag := NewStructFieldTag(test.tag)
 
-			if !reflect.DeepEqual(gotTag, test.wantTag) {
-				t.Errorf("TEST_FAIL %s: got=%value want=%value", test.name, gotTag, test.wantTag)
+			if !gotTag.Equals(test.wantTag) {
+				t.Errorf("TEST_FAIL %s: got=%v want=%v", test.name, gotTag, test.wantTag)
 			} else {
 				t.Logf("TEST_OK %s: got=%value", test.name, gotTag)
 			}
@@ -85,7 +85,7 @@ func TestParseTags(t *testing.T) {
 			wantTags: Tags{
 				"json": &StructFieldTag{
 					Alias:   "abc",
-					Options: "def",
+					Options: &NativeOption{optionMap: map[string]string{"def": ""}},
 				},
 			},
 		},
@@ -95,11 +95,11 @@ func TestParseTags(t *testing.T) {
 			wantTags: Tags{
 				"json": &StructFieldTag{
 					Alias:   "abc",
-					Options: "def",
+					Options: &NativeOption{optionMap: map[string]string{"def": ""}},
 				},
 				"bigquery": &StructFieldTag{
 					Alias:   "-",
-					Options: "xyz,123",
+					Options: &NativeOption{optionMap: map[string]string{"xyz": "", "123": ""}},
 				},
 			},
 		},
