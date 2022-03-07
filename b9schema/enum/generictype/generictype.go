@@ -2,7 +2,7 @@ package generictype
 
 import (
 	"fmt"
-	"github.com/gitmann/shiny-reflector-golang/shiny/enum/typecategory"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 	"reflect"
 )
 

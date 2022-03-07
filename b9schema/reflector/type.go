@@ -2,15 +2,15 @@ package reflector
 
 import (
 	"fmt"
-	"github.com/gitmann/shiny-reflector-golang/shiny/enum/generictype"
-	"github.com/gitmann/shiny-reflector-golang/shiny/enum/threeflag"
-	"github.com/gitmann/shiny-reflector-golang/shiny/enum/typecategory"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/threeflag"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 	"reflect"
 	"sort"
 	"strings"
 	"unicode"
 
-	"github.com/gitmann/shiny-reflector-golang/shiny/util"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/util"
 )
 
 // TypeElement holds type information about an element.
