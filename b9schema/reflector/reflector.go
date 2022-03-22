@@ -6,24 +6,40 @@ import (
 
 const (
 	NATIVE_DIALECT = "golang"
+
+	// Default options.
+	PRINT_NATIVE  = true
+	PATH_PREFIX   = true
+	DEREFERENCE   = false
+	PARSE_AS_JSON = true
 )
 
-var (
+type RenderOptions struct {
 	// PrintNative includes native details in output if true.
-	PrintNative = true
+	PrintNative bool
 
 	// PathPrefix uses the path as the prefix for string output.
-	PathPrefix = true
+	PathPrefix bool
 
 	// DeReference converts TypeRefs to their included types.
 	// - If TyepRefs have a cyclical relationship, the last TypeRef is kept as a TypeRef.
-	DeReference = false
+	DeReference bool
 
 	// ParseAsJSON applies JSON parsing rules.
 	// - Any lowercase element names are converted to 1st character uppercase so that they are exported.
 	//   - Original lowercase name is saved as the native "json" GetName.
-	ParseAsJSON = true
-)
+	ParseAsJSON bool
+}
+
+func NewRenderOptions() *RenderOptions {
+	opt := &RenderOptions{
+		PrintNative: PRINT_NATIVE,
+		PathPrefix:  PATH_PREFIX,
+		DeReference: DEREFERENCE,
+		ParseAsJSON: PARSE_AS_JSON,
+	}
+	return opt
+}
 
 // Reflector provides functions to build type and values from a Go value.
 type Reflector struct {
@@ -36,6 +52,7 @@ type Reflector struct {
 
 func NewReflector() *Reflector {
 	r := &Reflector{}
+
 	r.Reset()
 
 	return r

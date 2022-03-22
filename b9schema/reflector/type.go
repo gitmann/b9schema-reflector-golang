@@ -231,19 +231,19 @@ func (t *TypeElement) ChildPaths() []*PathList {
 }
 
 // RenderPath returns the PathList to the current element built from all ancestor path lists.
-func (t *TypeElement) RenderPath(renderFunc PathStringRenderer) *PathList {
+func (t *TypeElement) RenderPath(renderFunc PathStringRenderer, opt *RenderOptions) *PathList {
 	var p *PathList
 
 	if t.Parent == nil {
 		// This is a root element. Return a new PathList.
 		p := NewPathList()
-		p.Push(t.RenderPathString((renderFunc)))
+		p.Push(t.RenderPathString(renderFunc, opt))
 		return p
 	}
 
 	// Get the parent's path list and append the current element's path.
-	p = t.Parent.RenderPath(renderFunc)
-	p.Push(t.RenderPathString(renderFunc))
+	p = t.Parent.RenderPath(renderFunc, opt)
+	p.Push(t.RenderPathString(renderFunc, opt))
 
 	return p
 }
@@ -277,19 +277,19 @@ func (t *TypeElement) NativeDefault() *NativeType {
 }
 
 // ElementStringRenderer is a function that builds a string from a TypeElement.
-type ElementStringRenderer func(t *TypeElement, pathFunc PathStringRenderer) string
+type ElementStringRenderer func(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string
 
 // PathStringRenderer is a function that builds a path string from a TypeElement.
-type PathStringRenderer func(t *TypeElement) string
+type PathStringRenderer func(t *TypeElement, opt *RenderOptions) string
 
 // RenderPathString returns the element's string for the PathList.
 // Format is: [<Name>:]<Type>[:<TypeRef>]
 // - If Name is set, prefix with "Name", otherwise "-"
 // - If TypeRef is set, suffix with "TypeRef", otherwise "-"
 // - If Error is set, wrap entire string with "!"
-func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer) string {
+func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer, opt *RenderOptions) string {
 	if renderFunc != nil {
-		return renderFunc(t)
+		return renderFunc(t, opt)
 	}
 
 	if t.Type == generictype.Root.String() {
@@ -302,10 +302,18 @@ func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer) string {
 	}
 
 	// Type.
-	typePart := generictype.PathDefaultOfType(t.Type)
+	var typePart string
+	if t.TypeCategory == typecategory.Invalid.String() {
+		typePart = t.Type
+	} else {
+		typePart = generictype.PathDefaultOfType(t.Type)
+	}
 
-	// Add TypeRef suffix if set.
-	refPart := t.NativeDefault().TypeRef
+	// Add TypeRef suffix if set but not if de-referencing.
+	refPart := ""
+	if !opt.DeReference {
+		refPart = t.NativeDefault().TypeRef
+	}
 	if refPart != "" {
 		refPart = ":" + refPart
 	}
@@ -319,15 +327,6 @@ func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer) string {
 	}
 
 	return path
-}
-
-// String builds a string representation of the TypeElement.
-// Default is to build a CSV representation:
-// <id>,<parent>,<type>,<name>,<err>
-//
-// Implementation specifics are output on multiple, indented lines in JSON format.
-func (t *TypeElement) String() string {
-	return strings.Join(t.BuildStrings(""), "\n")
 }
 
 // IsBasicType returns true if the element is a basic type.
@@ -349,87 +348,38 @@ func (t *TypeElement) IsExported() bool {
 	return unicode.IsUpper(r[0])
 }
 
-func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer) []string {
+func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer, opt *RenderOptions) []string {
 	out := []string{}
 
 	// Process element with preFunc.
 	if preFunc != nil {
-		if s := preFunc(t, pathFunc); s != "" {
+		if s := preFunc(t, pathFunc, opt); s != "" {
 			out = append(out, s)
 		}
 	}
 
 	// Process children.
-	for _, childElem := range t.Children {
-		rendered := childElem.RenderStrings(preFunc, postFunc, pathFunc)
-		for _, r := range rendered {
-			if r != "" {
-				out = append(out, r)
+	if !opt.DeReference && t.TypeRef != "" {
+		// Skip children.
+	} else {
+		for _, childElem := range t.Children {
+			rendered := childElem.RenderStrings(preFunc, postFunc, pathFunc, opt)
+			for _, r := range rendered {
+				if r != "" {
+					out = append(out, r)
+				}
 			}
 		}
 	}
 
 	// Process element with postFunc.
 	if postFunc != nil {
-		if s := postFunc(t, pathFunc); s != "" {
+		if s := postFunc(t, pathFunc, opt); s != "" {
 			out = append(out, s)
 		}
 	}
 
 	return out
-}
-
-func (t *TypeElement) BuildStrings(formatName string) []string {
-	outLines := []string{}
-
-	// Ignore root elements without Parents.
-	if t.Parent != nil {
-		out := fmt.Sprintf("%d,%d,%q,%s,%q", t.ID, t.ParentID(), t.Name, t.Type, t.TypeRef)
-
-		if !PathPrefix {
-			// Start output with the path.
-			out = fmt.Sprintf("%s,%s", t.RenderPath(nil).String(), out)
-		}
-
-		if t.Error != "" {
-			out += "," + t.Error
-		}
-
-		outLines = append(outLines, out)
-
-		if len(t.Native) > 0 {
-			if PrintNative {
-				// Print native fields with fixed length for keys.
-				for _, native := range t.Native {
-					// First line is:
-					// <dialect>,<name>,<type>,<include>
-					out = fmt.Sprintf("  %q,%q,%s,%q,%s",
-						native.Dialect,
-						native.Name,
-						native.Type,
-						native.TypeRef,
-						native.Include,
-					)
-					if native.Error != "" {
-						out += "," + native.Error
-					}
-					outLines = append(outLines, out)
-
-					out = fmt.Sprintf("    %s%s",
-						strings.Repeat(" ", len(native.Dialect)+1),
-						strings.Join(native.Options.AsList(), ","))
-					outLines = append(outLines, out)
-				}
-			}
-		}
-	}
-
-	// Add output lines from Children.
-	for _, childElem := range t.Children {
-		outLines = append(outLines, childElem.BuildStrings(formatName)...)
-	}
-
-	return outLines
 }
 
 // PathList keeps a list of path string elements that form a unique identifier for a TypeElement.
@@ -792,117 +742,6 @@ func (typeList *TypeList) Elements() []*TypeElement {
 	return typeList.types
 }
 
-// String builds a default string representation of a type list.
-func (typeList *TypeList) String() string {
-	return strings.Join(typeList.BuildStrings(""), "\n")
-}
-
-// String builds a default string representation of a type list.
-// Each line is built as: <prefix> <body>
-// - <prefix> is the same for all lines with the same ParentID
-// - <body> is different for each line
-//
-// All output lines are collected before being output.
-// - Maximum <prefix> length is determined for each ParentID.
-// - Final output lines are built using the same field width for <prefix> for each ParentID.
-func (typeList *TypeList) BuildStrings(formatName string) []string {
-	outLines := []string{}
-
-	// Temporary holder for each output line.
-	type outputLine struct {
-		parentID int
-		prefix   string
-		body     string
-	}
-
-	// Map ID to ParentID to ensure that every indent is larger than its parent.
-	parentMap := map[int]int{}
-
-	// Keep track of max prefix length by ParentID.
-	maxParentPrefixLen := map[int]int{}
-
-	// Keep track of indents by parent and element ID.
-	indentLevel := 1
-	lastParentID := 0
-
-	// Indent level by ParentID
-	indentLevels := map[int]int{lastParentID: indentLevel}
-
-	// Build output tempLines.
-	tempLines := []*outputLine{}
-
-	for _, currentElem := range typeList.Elements() {
-		// Map ID to ParentID.
-		parentMap[currentElem.ID] = currentElem.ParentID()
-
-		// Build path list to determine indent.
-		pathList := currentElem.RenderPath(nil)
-
-		if currentElem.ParentID() != lastParentID {
-			// Parent ID changed.
-			if indentLevels[currentElem.ParentID()] > 0 {
-				// Already seen so moving back up the stack.
-				indentLevel = indentLevels[currentElem.ParentID()]
-			} else {
-				indentLevel++
-				indentLevels[currentElem.ParentID()] = indentLevel
-			}
-		}
-
-		// Initialize a new output line.
-		newLine := &outputLine{parentID: currentElem.ParentID()}
-
-		// Build indent strings based on format name.
-		if PathPrefix {
-			newLine.prefix = pathList.String()
-		} else {
-			newLine.prefix = strings.Repeat(".", 2*pathList.Len())
-		}
-
-		// Update max lengths for parent.
-		if len(newLine.prefix) > maxParentPrefixLen[currentElem.ParentID()] {
-			maxParentPrefixLen[currentElem.ParentID()] = len(newLine.prefix)
-		}
-
-		for _, b := range currentElem.BuildStrings(formatName) {
-			// Make a new line using fields from newLine.
-			bodyLine := &outputLine{
-				parentID: newLine.parentID,
-				prefix:   newLine.prefix,
-				body:     b,
-			}
-			tempLines = append(tempLines, bodyLine)
-		}
-	}
-
-	// Build all lines and add to output.
-	for _, temp := range tempLines {
-		outLines = append(outLines, temp.body)
-	}
-
-	//// Fix indents so that each element indent is 2 longer than its parent's parent.
-	//for _, parent := range parentMap {
-	//	parent2 := parentMap[parent]
-	//	if maxParentPrefixLen[parent] <= maxParentPrefixLen[parent2] {
-	//		maxParentPrefixLen[parent] = maxParentPrefixLen[parent2] + 2
-	//	}
-	//}
-	//
-	//// Build list of strings using max lengths.
-	//lines := []string{}
-	//for _, currentElem := range tempLines {
-	//	prefixLen := maxParentPrefixLen[currentElem.parent]
-	//
-	//	newLine := fmt.Sprintf("%-*s >>> %s",
-	//		prefixLen, currentElem.prefix,
-	//		currentElem.body)
-	//
-	//	lines = append(lines, newLine)
-	//}
-
-	return outLines
-}
-
 // TypeResult is the result of parsing types.
 type TypeResult struct {
 	// Root is a list of types in the order found.
@@ -1015,20 +854,21 @@ type TypeResult struct {
 // }
 
 // RenderStrings builds a string representation of a type result using the given pre, path, and post functions.
-func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer) []string {
-	// Set formatting options.
-	printTypeRefs := true
+func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer, opt *RenderOptions) []string {
+	if opt == nil {
+		opt = NewRenderOptions()
+	}
 
 	// Build output outLines.
 	out := []string{}
 
 	// Print type refs.
-	if printTypeRefs {
+	if !opt.DeReference {
 		typeRefMap := typeResult.TypeRefs.ChildMap()
 		typeRefKeys := typeResult.TypeRefs.ChildKeys(typeRefMap)
 
 		for _, childName := range typeRefKeys {
-			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc)
+			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc, opt)
 			for _, r := range rendered {
 				if r != "" {
 					out = append(out, r)
@@ -1038,7 +878,7 @@ func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRende
 	}
 
 	//	Print types.
-	rendered := typeResult.Root.RenderStrings(preFunc, postFunc, pathFunc)
+	rendered := typeResult.Root.RenderStrings(preFunc, postFunc, pathFunc, opt)
 	for _, r := range rendered {
 		if r != "" {
 			out = append(out, r)
@@ -1077,11 +917,19 @@ func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem
 	// Get generic type for value.
 	genericType := generictype.GenericTypeOf(v)
 	currentElem.Type = genericType.String()
+	currentElem.TypeCategory = genericType.Category().String()
 
 	// ERROR CHECKING
 	// Check for invalid types. These may panic on some operations so we exit quickly with minimal reflection.
 	if genericType.Category() == typecategory.Invalid {
 		currentElem.Error = InvalidKindErr
+
+		if v == reflect.ValueOf(nil) {
+			currentElem.Type = currentElem.Type + ":nil"
+		} else {
+			currentElem.Type = currentElem.Type + ":" + v.Kind().String()
+		}
+
 		return
 	}
 

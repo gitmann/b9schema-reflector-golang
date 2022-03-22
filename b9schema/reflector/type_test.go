@@ -14,8 +14,8 @@ import (
 var allTests = [][]TestCase{
 	rootJSONTests,
 	rootGoTests,
+	typeTests,
 
-	// invalidTests,
 	// specialTests,
 	//basicTests,
 	//arrayTests,
@@ -31,29 +31,71 @@ type TestCase struct {
 	name  string
 	value interface{}
 
-	wantStrings []string
+	// Expected strings for reference and de-reference.
+	refStrings   []string
+	derefStrings []string
 }
 
 // *** All reflect types ***
 
 // rootTests validate that the top-level element is either a struct or Reference.
 var rootJSONTests = []TestCase{
-	{name: "json-null", value: fromJSON([]byte(`null`)), wantStrings: []string{"Root.!invalid! ERROR:kind not supported"}},
-
-	{name: "json-string", value: fromJSON([]byte(`"Hello"`)), wantStrings: []string{"Root.!string! ERROR:root type must be a struct"}},
-	{name: "json-int", value: fromJSON([]byte(`123`)), wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
-	{name: "json-float", value: fromJSON([]byte(`234.345`)), wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
-	{name: "json-bool", value: fromJSON([]byte(`true`)), wantStrings: []string{"Root.!boolean! ERROR:root type must be a struct"}},
-
-	{name: "json-list-empty", value: fromJSON([]byte(`[]`)), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-	{name: "json-list", value: fromJSON([]byte(`[1,2,3]`)), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-
-	{name: "json-object-empty", value: fromJSON([]byte(`{}`)), wantStrings: []string{"Root.!{}! ERROR:empty map not supported"}},
-
+	{
+		name:         "json-null",
+		value:        fromJSON([]byte(`null`)),
+		refStrings:   []string{"Root.!invalid:nil! ERROR:kind not supported"},
+		derefStrings: []string{"Root.!invalid:nil! ERROR:kind not supported"},
+	},
+	{
+		name:         "json-string",
+		value:        fromJSON([]byte(`"Hello"`)),
+		refStrings:   []string{"Root.!string! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!string! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-int",
+		value:        fromJSON([]byte(`123`)),
+		refStrings:   []string{"Root.!float! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!float! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-float",
+		value:        fromJSON([]byte(`234.345`)),
+		refStrings:   []string{"Root.!float! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!float! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-bool",
+		value:        fromJSON([]byte(`true`)),
+		refStrings:   []string{"Root.!boolean! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!boolean! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-list-empty",
+		value:        fromJSON([]byte(`[]`)),
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-list",
+		value:        fromJSON([]byte(`[1,2,3]`)),
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "json-object-empty",
+		value:        fromJSON([]byte(`{}`)),
+		refStrings:   []string{"Root.!{}! ERROR:empty map not supported"},
+		derefStrings: []string{"Root.!{}! ERROR:empty map not supported"},
+	},
 	{
 		name:  "json-object",
 		value: fromJSON([]byte(`{"key1":"Hello"}`)),
-		wantStrings: []string{
+		refStrings: []string{
+			"Root.{}",
+			"Root.{}.Key1:string",
+		},
+		derefStrings: []string{
 			"Root.{}",
 			"Root.{}.Key1:string",
 		},
@@ -61,98 +103,298 @@ var rootJSONTests = []TestCase{
 }
 
 var rootGoTests = []TestCase{
-	{name: "golang-nil", value: nil, wantStrings: []string{"Root.!invalid! ERROR:kind not supported"}},
-
-	{name: "golang-string", value: "Hello", wantStrings: []string{"Root.!string! ERROR:root type must be a struct"}},
-	{name: "golang-int", value: 123, wantStrings: []string{"Root.!integer! ERROR:root type must be a struct"}},
-	{name: "golang-float", value: 234.345, wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
-	{name: "golang-bool", value: true, wantStrings: []string{"Root.!boolean! ERROR:root type must be a struct"}},
-
-	{name: "golang-array-0", value: [0]string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-	{name: "golang-array-3", value: [3]string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-
-	{name: "golang-slice-nil", value: func() interface{} { var s []string; return s }(), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-	{name: "golang-slice-0", value: []string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-	{name: "golang-slice-3", value: make([]string, 3), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
-
-	{name: "golang-struct-empty", value: func() interface{} { var s struct{}; return s }(), wantStrings: []string{"Root.!{}! ERROR:empty struct not supported"}},
-
+	{
+		name:         "golang-nil",
+		value:        nil,
+		refStrings:   []string{"Root.!invalid:nil! ERROR:kind not supported"},
+		derefStrings: []string{"Root.!invalid:nil! ERROR:kind not supported"},
+	},
+	{
+		name:         "golang-string",
+		value:        "Hello",
+		refStrings:   []string{"Root.!string! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!string! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-int",
+		value:        123,
+		refStrings:   []string{"Root.!integer! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!integer! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-float",
+		value:        234.345,
+		refStrings:   []string{"Root.!float! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!float! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-bool",
+		value:        true,
+		refStrings:   []string{"Root.!boolean! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.!boolean! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-array-0",
+		value:        [0]string{},
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-array-3",
+		value:        [3]string{},
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-slice-nil",
+		value:        func() interface{} { var s []string; return s }(),
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-slice-0",
+		value:        []string{},
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name:         "golang-slice-3",
+		value:        make([]string, 3),
+		refStrings:   []string{"Root.![]! ERROR:root type must be a struct"},
+		derefStrings: []string{"Root.![]! ERROR:root type must be a struct"},
+	},
+	{
+		name: "golang-struct-empty", value: func() interface{} { var s struct{}; return s }(),
+		refStrings:   []string{"Root.!{}! ERROR:empty struct not supported"},
+		derefStrings: []string{"Root.!{}! ERROR:empty struct not supported"},
+	},
 	{
 		name:  "golang-struct-noinit",
 		value: func() interface{} { var s StringStruct; return s }(),
-		wantStrings: []string{
-			"TypeRefs.StringStruct:{}",
-			"TypeRefs.StringStruct:{}.Value:string",
-			"Root.{}:StringStruct",
-			"Root.{}:StringStruct.Value:string",
+		refStrings: []string{
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:StringStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Value:string`,
 		},
 	},
 	{
 		name:  "golang-struct-init",
 		value: StringStruct{},
-		wantStrings: []string{
-			"TypeRefs.StringStruct:{}",
-			"TypeRefs.StringStruct:{}.Value:string",
-			"Root.{}:StringStruct",
-			"Root.{}:StringStruct.Value:string",
+		refStrings: []string{
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:StringStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Value:string`,
 		},
 	},
 	{
 		name:  "golang-struct-private",
 		value: PrivateStruct{},
-		wantStrings: []string{
-			"TypeRefs.!PrivateStruct:{}! ERROR:struct has no exported fields",
-			"Root.!{}:PrivateStruct! ERROR:struct has no exported fields",
+		refStrings: []string{
+			`TypeRefs.!PrivateStruct:{}! ERROR:struct has no exported fields`,
+			`Root.!{}:PrivateStruct! ERROR:struct has no exported fields`,
+		},
+		derefStrings: []string{
+			`Root.!{}! ERROR:struct has no exported fields`,
 		},
 	},
 
 	{
 		name:  "golang-interface-struct-noinit",
 		value: func() interface{} { var s interface{} = StringStruct{}; return s }(),
-		wantStrings: []string{
-			"TypeRefs.StringStruct:{}",
-			"TypeRefs.StringStruct:{}.Value:string",
-			"Root.{}:StringStruct",
-			"Root.{}:StringStruct.Value:string",
+		refStrings: []string{
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:StringStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Value:string`,
 		},
 	},
 	{
 		name:  "golang-pointer-struct-noinit",
 		value: func() interface{} { var s *StringStruct; return s }(),
-		wantStrings: []string{
-			"TypeRefs.StringStruct:{}",
-			"TypeRefs.StringStruct:{}.Value:string",
-			"Root.{}:StringStruct",
-			"Root.{}:StringStruct.Value:string",
+		refStrings: []string{
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:StringStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Value:string`,
 		},
 	},
 	{
 		name:  "golang-pointer-struct-init",
 		value: &StringStruct{},
-		wantStrings: []string{
-			"TypeRefs.StringStruct:{}",
-			"TypeRefs.StringStruct:{}.Value:string",
-			"Root.{}:StringStruct",
-			"Root.{}:StringStruct.Value:string",
+		refStrings: []string{
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:StringStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Value:string`,
 		},
 	},
 }
 
-// Invalid types for shiny schemas.
+// Check all types from reflect package.
+type BoolTypes struct {
+	Bool bool
+}
+
+type IntegerTypes struct {
+	Int     int
+	Int8    int8
+	Int16   int16
+	Int32   int32
+	Int64   int64
+	Uint    uint
+	Uint8   uint8
+	Uint16  uint16
+	Uint32  uint32
+	Uint64  uint64
+	Uintptr uintptr
+}
+
+type FloatTypes struct {
+	Float32 float32
+	Float64 float64
+}
+
+type StringTypes struct {
+	String string
+}
+
+type InvalidTypes struct {
+	Complex64  complex64
+	Complex128 complex128
+
+	Chan          chan int
+	Func          func()
+	UnsafePointer unsafe.Pointer
+}
+
+type AllTypes struct {
+	Array [3]string
+	// Interface     interface{}
+	// Map           map[int]int
+	// Ptr           *PrivateStruct
+	// Slice         []interface{}
+	// Struct        struct{}
+}
+
 // - Invalid
 // - Complex64
 // - Complex128
 // - Chan
 // - Func
 // - UnsafePointer
-var invalidTests = []TestCase{
-	{name: "nil", value: nil},
-	{name: "complex", value: complex(123, 456)},
-	{name: "complex", value: complex64(complex(123, 456))},
-	{name: "complex", value: complex128(complex(123, 456))},
-	{name: "chan", value: make(chan bool)},
-	{name: "func", value: func() {}},
-	{name: "unsafeptr", value: func() interface{} { s := "hello"; return unsafe.Pointer(&s) }()},
+var typeTests = []TestCase{
+	{
+		name:  "boolean",
+		value: BoolTypes{},
+		refStrings: []string{
+			`TypeRefs.BoolTypes:{}`,
+			`TypeRefs.BoolTypes:{}.Bool:boolean`,
+			`Root.{}:BoolTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Bool:boolean`,
+		},
+	},
+	{
+		name:  "integer",
+		value: IntegerTypes{},
+		refStrings: []string{
+			`TypeRefs.IntegerTypes:{}`,
+			`TypeRefs.IntegerTypes:{}.Int:integer`,
+			`TypeRefs.IntegerTypes:{}.Int8:integer`,
+			`TypeRefs.IntegerTypes:{}.Int16:integer`,
+			`TypeRefs.IntegerTypes:{}.Int32:integer`,
+			`TypeRefs.IntegerTypes:{}.Int64:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint8:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint16:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint32:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint64:integer`,
+			`TypeRefs.IntegerTypes:{}.Uintptr:integer`,
+			`Root.{}:IntegerTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Int:integer`,
+			`Root.{}.Int8:integer`,
+			`Root.{}.Int16:integer`,
+			`Root.{}.Int32:integer`,
+			`Root.{}.Int64:integer`,
+			`Root.{}.Uint:integer`,
+			`Root.{}.Uint8:integer`,
+			`Root.{}.Uint16:integer`,
+			`Root.{}.Uint32:integer`,
+			`Root.{}.Uint64:integer`,
+			`Root.{}.Uintptr:integer`,
+		},
+	},
+	{
+		name:  `float`,
+		value: FloatTypes{},
+		refStrings: []string{
+			`TypeRefs.FloatTypes:{}`,
+			`TypeRefs.FloatTypes:{}.Float32:float`,
+			`TypeRefs.FloatTypes:{}.Float64:float`,
+			`Root.{}:FloatTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Float32:float`,
+			`Root.{}.Float64:float`,
+		},
+	},
+	{
+		name:  "string",
+		value: StringTypes{},
+		refStrings: []string{
+			`TypeRefs.StringTypes:{}`,
+			`TypeRefs.StringTypes:{}.String:string`,
+			`Root.{}:StringTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.String:string`,
+		},
+	},
+	{
+		name:  "invalid",
+		value: InvalidTypes{},
+		refStrings: []string{
+			`TypeRefs.InvalidTypes:{}`,
+			`TypeRefs.InvalidTypes:{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}.!Chan:invalid:chan! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}.!Func:invalid:func! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
+			`Root.{}:InvalidTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
+			`Root.{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
+			`Root.{}.!Chan:invalid:chan! ERROR:kind not supported`,
+			`Root.{}.!Func:invalid:func! ERROR:kind not supported`,
+			`Root.{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
+		},
+	},
 }
 
 // Basic types for shiny schemas.
@@ -599,18 +841,13 @@ func makeJSON(x interface{}) interface{} {
 	}
 }
 
-// pathRender renders a PathString from a TypeElement.
-func pathRender(t *TypeElement) string {
-	return ""
-}
-
 // preRender renders a string from a TypeElement before Children are processed.
-func preRender(t *TypeElement, pathFunc PathStringRenderer) string {
+func preRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
 	if t.Type == generictype.Root.String() {
 		return ""
 	}
 
-	path := t.RenderPath(pathFunc)
+	path := t.RenderPath(pathFunc, opt)
 	out := path.String()
 	if t.Error != "" {
 		out += " ERROR:" + t.Error
@@ -620,18 +857,12 @@ func preRender(t *TypeElement, pathFunc PathStringRenderer) string {
 }
 
 // postRender renders a string from a TypeElement after Children are processed.
-func postRender(t *TypeElement, pathFunc PathStringRenderer) string {
+func postRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
 	return ""
 }
 
 func runTests(t *testing.T, testCases []TestCase) {
 	r := NewReflector()
-
-	// Configure package-level settings.
-	PrintNative = true
-	PathPrefix = false
-	DeReference = false
-	ParseAsJSON = true
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
@@ -646,32 +877,51 @@ func runTests(t *testing.T, testCases []TestCase) {
 			// 	fmt.Println(string(b))
 			// }
 
-			gotStrings := gotResult.RenderStrings(preRender, postRender, nil)
-			if !reflect.DeepEqual(gotStrings, test.wantStrings) {
-				t.Errorf("TEST_FAIL %s", test.name)
+			opt := NewRenderOptions()
+			for i := 0; i < 2; i++ {
+				opt.DeReference = i == 1
 
-				maxLen := len(gotStrings)
-				if len(test.wantStrings) > maxLen {
-					maxLen = len(test.wantStrings)
+				gotStrings := gotResult.RenderStrings(preRender, postRender, nil, opt)
+
+				var wantStrings []string
+				if opt.DeReference {
+					wantStrings = test.derefStrings
+				} else {
+					wantStrings = test.refStrings
 				}
 
-				for i := 0; i < maxLen; i++ {
-					got := ""
-					if i < len(gotStrings) {
-						got = gotStrings[i]
+				if !reflect.DeepEqual(gotStrings, wantStrings) {
+					t.Errorf("TEST_FAIL %s: deref=%t", test.name, opt.DeReference)
+
+					maxLen := len(gotStrings)
+					if len(wantStrings) > maxLen {
+						maxLen = len(wantStrings)
 					}
 
-					want := ""
-					if i < len(test.wantStrings) {
-						want = test.wantStrings[i]
+					for i := 0; i < maxLen; i++ {
+						got := ""
+						if i < len(gotStrings) {
+							got = gotStrings[i]
+						}
+
+						want := ""
+						if i < len(wantStrings) {
+							want = wantStrings[i]
+						}
+
+						var flag string
+						if got != want {
+							flag = ">"
+						}
+
+						t.Logf("%05d got =%s", i, got)
+						t.Logf("%5s want=%s", flag, want)
 					}
 
-					t.Logf("%05d got =%s", i, got)
-					t.Logf("      want=%s", want)
+				} else {
+					t.Logf("TEST_OK %s: deref=%t", test.name, opt.DeReference)
 				}
 
-			} else {
-				t.Logf("TEST_OK %s", test.name)
 			}
 		})
 	}
