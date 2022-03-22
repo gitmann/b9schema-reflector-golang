@@ -110,14 +110,14 @@ func TestParseTags(t *testing.T) {
 			gotTags := ParseTags(test.tag)
 
 			allKeys := map[string]interface{}{}
-			for tagName, _ := range test.wantTags {
+			for tagName := range test.wantTags {
 				allKeys[tagName] = nil
 			}
-			for tagName, _ := range gotTags {
+			for tagName := range gotTags {
 				allKeys[tagName] = nil
 			}
 
-			for tagName, _ := range allKeys {
+			for tagName := range allKeys {
 				got := gotTags[tagName]
 				want := test.wantTags[tagName]
 				if !reflect.DeepEqual(got, want) {

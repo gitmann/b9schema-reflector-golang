@@ -30,9 +30,6 @@ type Reflector struct {
 	// Label is an optional label for a block of elements.
 	Label string
 
-	// Keep track of the last ID assigned.
-	lastID int
-
 	// Keep track of refs found during parsing.
 	typeResult *TypeResult
 }
@@ -49,8 +46,8 @@ func (r *Reflector) Reset() *Reflector {
 	resetID()
 
 	r.typeResult = &TypeResult{
-		Root: NewRootElement(),
-		Refs: NewTypeRefs(),
+		Root:     NewRootElement("Root"),
+		TypeRefs: NewRootElement("TypeRefs"),
 	}
 
 	// Return *Reflector for chaining.

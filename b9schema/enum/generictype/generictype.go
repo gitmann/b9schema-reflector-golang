@@ -2,8 +2,9 @@ package generictype
 
 import (
 	"fmt"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 	"reflect"
+
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 )
 
 // GenericType defines generic types for shiny schemas.
@@ -12,7 +13,7 @@ type GenericType struct {
 	slug        string
 	pathDefault string
 	cat         typecategory.TypeCategory
-	kinds       map[reflect.Kind]interface{}
+	kinds       []string
 }
 
 // String returns GenericType as a string.
@@ -35,16 +36,15 @@ func (t *GenericType) PathDefault() string {
 
 // Invalid types are not allowed in shiny schemas.
 var Invalid = &GenericType{
-	slug:        "invalid",
-	pathDefault: "!invalid!",
-	cat:         typecategory.Invalid,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Invalid:       nil,
-		reflect.Complex64:     nil,
-		reflect.Complex128:    nil,
-		reflect.Chan:          nil,
-		reflect.Func:          nil,
-		reflect.UnsafePointer: nil,
+	slug: "invalid",
+	cat:  typecategory.Invalid,
+	kinds: []string{
+		reflect.Invalid.String(),
+		reflect.Complex64.String(),
+		reflect.Complex128.String(),
+		reflect.Chan.String(),
+		reflect.Func.String(),
+		reflect.UnsafePointer.String(),
 	},
 }
 
@@ -52,93 +52,121 @@ var Invalid = &GenericType{
 var Boolean = &GenericType{
 	slug: "boolean",
 	cat:  typecategory.Basic,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Bool: nil,
+	kinds: []string{
+		reflect.Bool.String(),
 	},
 }
 
 var Integer = &GenericType{
 	slug: "integer",
 	cat:  typecategory.Basic,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Int:     nil,
-		reflect.Int8:    nil,
-		reflect.Int16:   nil,
-		reflect.Int32:   nil,
-		reflect.Int64:   nil,
-		reflect.Uint:    nil,
-		reflect.Uint8:   nil,
-		reflect.Uint16:  nil,
-		reflect.Uint32:  nil,
-		reflect.Uint64:  nil,
-		reflect.Uintptr: nil,
+	kinds: []string{
+		reflect.Int.String(),
+		reflect.Int8.String(),
+		reflect.Int16.String(),
+		reflect.Int32.String(),
+		reflect.Int64.String(),
+		reflect.Uint.String(),
+		reflect.Uint8.String(),
+		reflect.Uint16.String(),
+		reflect.Uint32.String(),
+		reflect.Uint64.String(),
+		reflect.Uintptr.String(),
 	},
 }
 
 var Float = &GenericType{
 	slug: "float",
 	cat:  typecategory.Basic,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Float32: nil,
-		reflect.Float64: nil,
+	kinds: []string{
+		reflect.Float32.String(),
+		reflect.Float64.String(),
 	},
 }
 
 var String = &GenericType{
 	slug: "string",
 	cat:  typecategory.Basic,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.String: nil,
+	kinds: []string{
+		reflect.String.String(),
 	},
 }
 
 // Compound types.
 var List = &GenericType{
-	slug: "list",
-	cat:  typecategory.Compound,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Array: nil,
-		reflect.Slice: nil,
+	slug:        "list",
+	pathDefault: "[]",
+	cat:         typecategory.Compound,
+	kinds: []string{
+		reflect.Array.String(),
+		reflect.Slice.String(),
 	},
 }
 
 var Struct = &GenericType{
-	slug: "struct",
-	cat:  typecategory.Compound,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Map:    nil,
-		reflect.Struct: nil,
+	slug:        "struct",
+	pathDefault: "{}",
+	cat:         typecategory.Compound,
+	kinds: []string{
+		reflect.Map.String(),
+		reflect.Struct.String(),
 	},
 }
 
-// Other types.
+// Known types map Go standard types to b9schema types.
+// - kinds is a list of "PkgPath.Type"
+// These are a subset of protobuf well-known types:
+// https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
+
+var DateTime = &GenericType{
+	slug: "datetime",
+	cat:  typecategory.Known,
+	kinds: []string{
+		"time.Time",
+	},
+}
+
+// Reference types.
 var Interface = &GenericType{
-	slug: "interface",
-	cat:  typecategory.Interface,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Interface: nil,
+	slug:        "interface",
+	pathDefault: "{?}",
+	cat:         typecategory.Reference,
+	kinds: []string{
+		reflect.Interface.String(),
 	},
 }
 
 var Pointer = &GenericType{
-	slug: "pointer",
-	cat:  typecategory.Pointer,
-	kinds: map[reflect.Kind]interface{}{
-		reflect.Ptr: nil,
+	slug:        "pointer",
+	pathDefault: "*",
+	cat:         typecategory.Reference,
+	kinds: []string{
+		reflect.Ptr.String(),
 	},
 }
 
+// Internal types.
+// These have no meaning outside of a b9schema.
+
+// Root is at the top of any type tree.
+var Root = &GenericType{
+	slug:        "root",
+	pathDefault: "$",
+	cat:         typecategory.Internal,
+	kinds:       []string{},
+}
+
 // genericTypeLookup provides fast mapping from reflect.Kind to GenericType.
-var genericTypeLookup map[reflect.Kind]*GenericType
+var genericTypeLookup map[string]*GenericType
 
 // init() initializes the genericTypeLookup map.
 func init() {
-	genericTypeLookup = map[reflect.Kind]*GenericType{}
+	genericTypeLookup = map[string]*GenericType{}
 	pathDefaultLookup = map[string]string{}
 
 	// mapTypes is a utility function to create map entries for the given GenericType.
 	mapTypes := func(t *GenericType) {
-		for k, _ := range t.kinds {
+		for _, k := range t.kinds {
 			// Panic if duplicate type mappings exist.
 			if genericTypeLookup[k] != nil {
 				panic(fmt.Sprintf("duplicate GenericType mapping for %q", t))
@@ -159,15 +187,32 @@ func init() {
 	mapTypes(List)
 	mapTypes(Struct)
 
+	mapTypes(DateTime)
+
 	mapTypes(Interface)
 	mapTypes(Pointer)
 }
 
 // GenericTypeOf returns the GenericType of the given reflect.Value.
 func GenericTypeOf(v reflect.Value) *GenericType {
-	if t := genericTypeLookup[v.Kind()]; t != nil {
+	if t := genericTypeLookup[v.Kind().String()]; t != nil {
+		if t == Invalid {
+			// Return invalid types immediately.
+			return t
+		}
+
+		// Look for special types.
+		if v.Type().PkgPath() != "" {
+			fullPath := fmt.Sprintf("%s.%s", v.Type().PkgPath(), v.Type().Name())
+			if specialType := genericTypeLookup[fullPath]; specialType != nil {
+				return specialType
+			}
+		}
+
+		// Not a special type.
 		return t
 	}
+
 	return Invalid
 }
 

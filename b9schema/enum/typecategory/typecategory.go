@@ -14,8 +14,11 @@ var (
 	Invalid  = TypeCategory{"invalid"}
 	Basic    = TypeCategory{"basic"}
 	Compound = TypeCategory{"compound"}
+	Known    = TypeCategory{"known"}
 
-	// The following types are Go-specific.
-	Pointer   = TypeCategory{"pointer"}
-	Interface = TypeCategory{"interface"}
+	// The following types are wrappers or pointers around other types.
+	Reference = TypeCategory{"reference"}
+
+	// The following types are for internal use only.
+	Internal = TypeCategory{"internal"}
 )

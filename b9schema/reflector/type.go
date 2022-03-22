@@ -2,13 +2,14 @@ package reflector
 
 import (
 	"fmt"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/threeflag"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 	"reflect"
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/threeflag"
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
 
 	"github.com/gitmann/shiny-reflector-golang/b9schema/util"
 )
@@ -17,41 +18,44 @@ import (
 // - TypeElement should be cross-platform and only use basic types.
 type TypeElement struct {
 	// Unique identifier for an element.
-	ID int
-
-	// Pointer to Parent
-	Parent *TypeElement
-
-	// Pointers to children.
-	Children *TypeList
+	ID int `json:"-"`
 
 	// Optional Name and Description of element.
 	// - Name applies to struct/map types with string keys.
-	Name        string
-	Description string
+	Name        string `json:",omitempty"`
+	Description string `json:",omitempty"`
+
+	// Nullable indicates that a field should accept null in addition to values.
+	Nullable bool `json:",omitempty"`
 
 	// Generic type of element.
-	Type         string
-	TypeCategory string
+	TypeCategory string `json:",omitempty"`
+	Type         string `json:",omitempty"`
 
 	// TypeRef holds the name of a type (e.g. struct)
-	TypeRef string
+	TypeRef string `json:",omitempty"`
 
 	// NativeDialect is the name of the dialect that was the source for the schema.
-	NativeDialect string
+	NativeDialect string `json:"-"`
 
 	// Native type features by dialect name.
-	Native map[string]*NativeType
+	Native map[string]*NativeType `json:"-"`
 
 	// Capture error if element cannot reflect.
-	Error string
+	Error string `json:",omitempty"`
+
+	// Pointers to Parent and Children.
+	Parent   *TypeElement   `json:"-"`
+	Children []*TypeElement `json:",omitempty"`
 }
 
 // NewRootElement creates a new type element that is a root of a tree.
 // - Root elements do not have parents and do not produce output.
-func NewRootElement() *TypeElement {
-	r := NewTypeElement("root")
-	r.Type = "root"
+func NewRootElement(name string) *TypeElement {
+	r := NewTypeElement(name)
+
+	r.Type = generictype.Root.String()
+	r.TypeCategory = generictype.Root.Category().String()
 
 	return r
 }
@@ -62,12 +66,12 @@ func NewTypeElement(name string) *TypeElement {
 		ID: nextID(),
 
 		Parent:   nil,
-		Children: NewTypeList(),
+		Children: []*TypeElement{},
 
 		Name: name,
 
 		NativeDialect: NATIVE_DIALECT,
-		Native:        make(map[string]*NativeType),
+		Native:        map[string]*NativeType{},
 	}
 	t.Native[NATIVE_DIALECT] = NewNativeType(NATIVE_DIALECT)
 
@@ -95,15 +99,61 @@ func (t *TypeElement) AddChild(childElem *TypeElement) {
 	}
 
 	childElem.Parent = t
-	t.Children.Push(childElem)
+	t.Children = append(t.Children, childElem)
+}
+
+// ChildMap returns a map of Children name --> *TypeElement
+// - Output map can be passed to ChildKeys, ContainsChild, ChildByName for reuse.
+func (t *TypeElement) ChildMap() map[string]*TypeElement {
+	out := map[string]*TypeElement{}
+	for _, childElem := range t.Children {
+		out[childElem.Name] = childElem
+	}
+	return out
+}
+
+// ChildKeys returns a sorted list of child names.
+func (t *TypeElement) ChildKeys(m map[string]*TypeElement) []string {
+	if len(m) == 0 {
+		m = t.ChildMap()
+	}
+
+	out := make([]string, len(m))
+	if len(m) > 0 {
+		i := 0
+		for k := range m {
+			out[i] = k
+			i++
+		}
+
+		sort.Strings(out)
+	}
+
+	return out
+}
+
+// ContainsChild returns true if a child with the given name exist.
+func (t *TypeElement) ContainsChild(name string, m map[string]*TypeElement) bool {
+	c := t.ChildByName(name, m)
+	return c != nil
+}
+
+// ChildByName gets the child with the given element name.
+// - Returns nil if child does not exist.
+func (t *TypeElement) ChildByName(name string, m map[string]*TypeElement) *TypeElement {
+	if len(m) == 0 {
+		m = t.ChildMap()
+	}
+	return m[name]
 }
 
 // RemoveAllChildren removes all children from the current element.
 func (t *TypeElement) RemoveAllChildren() {
-	for _, childElem := range t.Children.Elements() {
+	for _, childElem := range t.Children {
 		childElem.Parent = nil
 	}
-	t.Children = NewTypeList()
+
+	t.Children = []*TypeElement{}
 }
 
 // RemoveChild removes the given child from the Children list.
@@ -115,10 +165,10 @@ func (t *TypeElement) RemoveChild(childElem *TypeElement) {
 	}
 
 	// Copy all children except the given one.
-	newChildren := NewTypeList()
-	for _, elem := range t.Children.Elements() {
+	newChildren := []*TypeElement{}
+	for _, elem := range t.Children {
 		if elem.ID != childElem.ID {
-			newChildren.Push(elem)
+			newChildren = append(newChildren, elem)
 		} else {
 			childElem.Parent = nil
 		}
@@ -134,7 +184,7 @@ func (t *TypeElement) Copy() *TypeElement {
 		ID: nextID(),
 
 		Parent:   nil,
-		Children: NewTypeList(),
+		Children: []*TypeElement{},
 
 		Name:        t.Name,
 		Description: t.Description,
@@ -151,7 +201,10 @@ func (t *TypeElement) Copy() *TypeElement {
 	}
 
 	// Copy Children with new element as parent.
-	n.Children = t.Children.Copy(n)
+	for _, childElem := range t.Children {
+		newChild := childElem.Copy()
+		n.AddChild(newChild)
+	}
 
 	for dialect, native := range t.Native {
 		n.Native[dialect] = native.Copy()
@@ -177,18 +230,20 @@ func (t *TypeElement) ChildPaths() []*PathList {
 	panic("not implemented")
 }
 
-// Path returns the PathList to the current element built from all ancestor path lists.
-func (t *TypeElement) Path() *PathList {
+// RenderPath returns the PathList to the current element built from all ancestor path lists.
+func (t *TypeElement) RenderPath(renderFunc PathStringRenderer) *PathList {
 	var p *PathList
 
 	if t.Parent == nil {
-		// This is a root element. Return a new, empty PathList.
-		return NewPathList()
+		// This is a root element. Return a new PathList.
+		p := NewPathList()
+		p.Push(t.RenderPathString((renderFunc)))
+		return p
 	}
 
 	// Get the parent's path list and append the current element's path.
-	p = t.Parent.Path()
-	p.Push(t.PathString())
+	p = t.Parent.RenderPath(renderFunc)
+	p.Push(t.RenderPathString(renderFunc))
 
 	return p
 }
@@ -221,22 +276,46 @@ func (t *TypeElement) NativeDefault() *NativeType {
 	return t.Native[t.NativeDialect]
 }
 
-// PathString returns the element's string for the PathList.
-// Format is: [<Name>:]<Type>[:<TypeRef>]
-// - If Name is set, prefix with "Name:"
-// - If TypeRef is set, suffix with ":TypeRef"
-func (t *TypeElement) PathString() string {
-	// Always start with the Type.
-	path := generictype.PathDefaultOfType(t.Type)
+// ElementStringRenderer is a function that builds a string from a TypeElement.
+type ElementStringRenderer func(t *TypeElement, pathFunc PathStringRenderer) string
 
-	// Add Name prefix if set.
-	if t.Name != "" {
-		path = fmt.Sprintf("%s:%s", t.Name, path)
+// PathStringRenderer is a function that builds a path string from a TypeElement.
+type PathStringRenderer func(t *TypeElement) string
+
+// RenderPathString returns the element's string for the PathList.
+// Format is: [<Name>:]<Type>[:<TypeRef>]
+// - If Name is set, prefix with "Name", otherwise "-"
+// - If TypeRef is set, suffix with "TypeRef", otherwise "-"
+// - If Error is set, wrap entire string with "!"
+func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer) string {
+	if renderFunc != nil {
+		return renderFunc(t)
 	}
 
+	if t.Type == generictype.Root.String() {
+		return t.Name
+	}
+
+	namePart := t.Name
+	if namePart != "" {
+		namePart += ":"
+	}
+
+	// Type.
+	typePart := generictype.PathDefaultOfType(t.Type)
+
 	// Add TypeRef suffix if set.
-	if t.NativeDefault().TypeRef != "" {
-		return fmt.Sprintf("%s:%s", path, t.NativeDefault().TypeRef)
+	refPart := t.NativeDefault().TypeRef
+	if refPart != "" {
+		refPart = ":" + refPart
+	}
+
+	// Build path.
+	path := namePart + typePart + refPart
+
+	// Wrap type in "!" if current element is an error.
+	if t.Error != "" {
+		path = fmt.Sprintf("!%s!", path)
 	}
 
 	return path
@@ -270,6 +349,36 @@ func (t *TypeElement) IsExported() bool {
 	return unicode.IsUpper(r[0])
 }
 
+func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer) []string {
+	out := []string{}
+
+	// Process element with preFunc.
+	if preFunc != nil {
+		if s := preFunc(t, pathFunc); s != "" {
+			out = append(out, s)
+		}
+	}
+
+	// Process children.
+	for _, childElem := range t.Children {
+		rendered := childElem.RenderStrings(preFunc, postFunc, pathFunc)
+		for _, r := range rendered {
+			if r != "" {
+				out = append(out, r)
+			}
+		}
+	}
+
+	// Process element with postFunc.
+	if postFunc != nil {
+		if s := postFunc(t, pathFunc); s != "" {
+			out = append(out, s)
+		}
+	}
+
+	return out
+}
+
 func (t *TypeElement) BuildStrings(formatName string) []string {
 	outLines := []string{}
 
@@ -279,7 +388,7 @@ func (t *TypeElement) BuildStrings(formatName string) []string {
 
 		if !PathPrefix {
 			// Start output with the path.
-			out = fmt.Sprintf("%s,%s", t.Path().String(), out)
+			out = fmt.Sprintf("%s,%s", t.RenderPath(nil).String(), out)
 		}
 
 		if t.Error != "" {
@@ -316,7 +425,9 @@ func (t *TypeElement) BuildStrings(formatName string) []string {
 	}
 
 	// Add output lines from Children.
-	outLines = append(outLines, t.Children.BuildStrings(formatName)...)
+	for _, childElem := range t.Children {
+		outLines = append(outLines, childElem.BuildStrings(formatName)...)
+	}
 
 	return outLines
 }
@@ -725,7 +836,7 @@ func (typeList *TypeList) BuildStrings(formatName string) []string {
 		parentMap[currentElem.ID] = currentElem.ParentID()
 
 		// Build path list to determine indent.
-		pathList := currentElem.Path()
+		pathList := currentElem.RenderPath(nil)
 
 		if currentElem.ParentID() != lastParentID {
 			// Parent ID changed.
@@ -792,168 +903,150 @@ func (typeList *TypeList) BuildStrings(formatName string) []string {
 	return outLines
 }
 
-// TypeRefs holds type references by name.
-// - A type reference is a named list of TypeElements.
-type TypeRefs struct {
-	refs map[string]*TypeElement
-}
-
-// NewTypeRefs initializes a new TypeRefs map.
-func NewTypeRefs() *TypeRefs {
-	return &TypeRefs{refs: map[string]*TypeElement{}}
-}
-
-// Get returns the TypeList associated with the reference type name.
-func (r *TypeRefs) Get(refName string) *TypeElement {
-	return r.refs[refName]
-}
-
-// Contains returns true if the refName exists in the TypeRefs map.
-func (r *TypeRefs) Contains(refName string) bool {
-	return r.refs[refName] != nil
-}
-
-// Add adds a new type reference to the map.
-func (r *TypeRefs) Add(refName string, refElem *TypeElement) {
-	// Ignore empty names.
-	if refName == "" {
-		return
-	}
-
-	// Ignore empty type list.
-	if refElem == nil {
-		return
-	}
-
-	r.refs[refName] = refElem
-}
-
-// Keys returns a sorted list of TypeRef names.
-func (r *TypeRefs) Keys() []string {
-	if len(r.refs) == 0 {
-		return []string{}
-	}
-
-	out := make([]string, len(r.refs))
-	i := 0
-	for k, _ := range r.refs {
-		out[i] = k
-		i++
-	}
-
-	sort.Strings(out)
-	return out
-}
-
 // TypeResult is the result of parsing types.
 type TypeResult struct {
 	// Root is a list of types in the order found.
 	Root *TypeElement
 
-	// Refs holds a map of named types by name.
-	Refs *TypeRefs
+	// TypeRefs holds a map of named types by name.
+	TypeRefs *TypeElement
 }
 
-// String builds a default string representation of a type result.
-// - Each line starts with 3 comma-delimited values: <prefix>,<id>,<parent>
-// - Each parent level has all prefixes with the same width.
-func (typeResult *TypeResult) String(formatName string) string {
-	// Keep track of max prefix length by parent ID.
-	maxParentLen := map[string]int{}
+// // String builds a default string representation of a type result.
+// // - Each line starts with 3 comma-delimited values: <prefix>,<id>,<parent>
+// // - Each parent level has all prefixes with the same width.
+// func (typeResult *TypeResult) String(formatName string) string {
+// 	// Keep track of max prefix length by parent ID.
+// 	maxParentLen := map[string]int{}
 
-	// Keep map from ID --> ParentID. Every parent indent must be larger than its parent indent.
-	idMap := map[string]string{}
+// 	// Keep map from ID --> ParentID. Every parent indent must be larger than its parent indent.
+// 	idMap := map[string]string{}
 
-	// Keep lines parts in a struct.
-	type lineTokens struct {
-		prefix string
-		id     string
-		parent string
-		other  string
-	}
+// 	// Keep lines parts in a struct.
+// 	type lineTokens struct {
+// 		prefix string
+// 		id     string
+// 		parent string
+// 		other  string
+// 	}
 
-	// Iterate through strings to determine max lengths for each parent level.
-	outputLines := []*lineTokens{}
-	for _, line := range typeResult.BuildStrings(formatName) {
-		// Split line into prefix,id,parent,other
-		tokens := strings.SplitN(line, ",", 4)
+// 	// Iterate through strings to determine max lengths for each parent level.
+// 	outputLines := []*lineTokens{}
+// 	for _, line := range typeResult.BuildStrings(formatName) {
+// 		// Split line into prefix,id,parent,other
+// 		tokens := strings.SplitN(line, ",", 4)
 
-		if len(tokens) != 4 {
-			// Some other line type. Just add everything in other.
-			outputLines = append(outputLines, &lineTokens{other: line})
-		} else {
-			newLine := &lineTokens{
-				prefix: tokens[0],
-				id:     tokens[1],
-				parent: tokens[2],
-				other:  tokens[3],
-			}
-			outputLines = append(outputLines, newLine)
+// 		if len(tokens) != 4 {
+// 			// Some other line type. Just add everything in other.
+// 			outputLines = append(outputLines, &lineTokens{other: line})
+// 		} else {
+// 			newLine := &lineTokens{
+// 				prefix: tokens[0],
+// 				id:     tokens[1],
+// 				parent: tokens[2],
+// 				other:  tokens[3],
+// 			}
+// 			outputLines = append(outputLines, newLine)
 
-			// Update map from id --> parent
-			idMap[newLine.id] = newLine.parent
+// 			// Update map from id --> parent
+// 			idMap[newLine.id] = newLine.parent
 
-			// Update max length for parent level.
-			if len(newLine.prefix) > maxParentLen[newLine.parent] {
-				maxParentLen[newLine.parent] = len(newLine.prefix)
-			}
-		}
-	}
+// 			// Update max length for parent level.
+// 			if len(newLine.prefix) > maxParentLen[newLine.parent] {
+// 				maxParentLen[newLine.parent] = len(newLine.prefix)
+// 			}
+// 		}
+// 	}
 
-	// Make a pass to ensure that each parent indent is at least 2 larger than its parent.
-	for parent, indent := range maxParentLen {
-		parentParent := idMap[parent]
-		if parentParent != "" {
-			if maxParentLen[parentParent]+2 > indent {
-				maxParentLen[parent] = maxParentLen[parentParent] + 2
-			}
-		}
-	}
+// 	// Make a pass to ensure that each parent indent is at least 2 larger than its parent.
+// 	for parent, indent := range maxParentLen {
+// 		parentParent := idMap[parent]
+// 		if parentParent != "" {
+// 			if maxParentLen[parentParent]+2 > indent {
+// 				maxParentLen[parent] = maxParentLen[parentParent] + 2
+// 			}
+// 		}
+// 	}
 
-	// Build output using lengths.
-	out := []string{}
-	for _, line := range outputLines {
-		var newLine string
-		if line.prefix == "" && line.id == "" && line.parent == "" {
-			newLine = line.other
-		} else {
-			newLine = fmt.Sprintf("%-*s >>> %s,%s,%s",
-				maxParentLen[line.parent], line.prefix, line.id, line.parent, line.other)
-		}
-		out = append(out, newLine)
-	}
+// 	// Build output using lengths.
+// 	out := []string{}
+// 	for _, line := range outputLines {
+// 		var newLine string
+// 		if line.prefix == "" && line.id == "" && line.parent == "" {
+// 			newLine = line.other
+// 		} else {
+// 			newLine = fmt.Sprintf("%-*s >>> %s,%s,%s",
+// 				maxParentLen[line.parent], line.prefix, line.id, line.parent, line.other)
+// 		}
+// 		out = append(out, newLine)
+// 	}
 
-	return strings.Join(out, "\n")
-}
+// 	return strings.Join(out, "\n")
+// }
 
-// BuildString builds a string representation of a type result using the given formatName.
-func (typeResult *TypeResult) BuildStrings(formatName string) []string {
+// // BuildString builds a string representation of a type result using the given formatName.
+// func (typeResult *TypeResult) BuildStrings(formatName string) []string {
+// 	// Set formatting options.
+// 	printHeaders := true
+// 	printTypeRefs := true
+
+// 	// Build output outLines.
+// 	outLines := []string{}
+
+// 	// Print type refs.
+// 	if printTypeRefs {
+// 		refNames := typeResult.TypeRefs.Keys()
+// 		for _, typeName := range refNames {
+// 			if printHeaders {
+// 				outLines = append(outLines, fmt.Sprintf("*** TypeRef: %s", typeName))
+// 			}
+// 			outLines = append(outLines, typeResult.TypeRefs.Get(typeName).BuildStrings(formatName)...)
+// 		}
+// 	}
+
+// 	//	Print types.
+// 	if printHeaders {
+// 		outLines = append(outLines, "*** Types")
+// 	}
+// 	outLines = append(outLines, typeResult.Root.BuildStrings(formatName)...)
+
+// 	//	Return final string.
+// 	return outLines
+// }
+
+// RenderStrings builds a string representation of a type result using the given pre, path, and post functions.
+func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer) []string {
 	// Set formatting options.
-	printHeaders := true
 	printTypeRefs := true
 
 	// Build output outLines.
-	outLines := []string{}
+	out := []string{}
 
 	// Print type refs.
 	if printTypeRefs {
-		refNames := typeResult.Refs.Keys()
-		for _, typeName := range refNames {
-			if printHeaders {
-				outLines = append(outLines, fmt.Sprintf("*** TypeRef: %s", typeName))
+		typeRefMap := typeResult.TypeRefs.ChildMap()
+		typeRefKeys := typeResult.TypeRefs.ChildKeys(typeRefMap)
+
+		for _, childName := range typeRefKeys {
+			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc)
+			for _, r := range rendered {
+				if r != "" {
+					out = append(out, r)
+				}
 			}
-			outLines = append(outLines, typeResult.Refs.Get(typeName).BuildStrings(formatName)...)
 		}
 	}
 
 	//	Print types.
-	if printHeaders {
-		outLines = append(outLines, fmt.Sprintf("*** Types"))
+	rendered := typeResult.Root.RenderStrings(preFunc, postFunc, pathFunc)
+	for _, r := range rendered {
+		if r != "" {
+			out = append(out, r)
+		}
 	}
-	outLines = append(outLines, typeResult.Root.BuildStrings(formatName)...)
 
 	//	Return final string.
-	return outLines
+	return out
 }
 
 // reflectTypeImpl is a recursive function to reflect Go values.
@@ -985,10 +1078,23 @@ func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem
 	genericType := generictype.GenericTypeOf(v)
 	currentElem.Type = genericType.String()
 
-	// Check for invalid types first. These may panic on some operations so we exit quickly with minimal reflection.
+	// ERROR CHECKING
+	// Check for invalid types. These may panic on some operations so we exit quickly with minimal reflection.
 	if genericType.Category() == typecategory.Invalid {
 		currentElem.Error = InvalidKindErr
 		return
+	}
+
+	// If parent is a root, the current element must be a struct or a Reference.
+	if currentElem.Parent == nil {
+		panic("parent is nil")
+	}
+
+	if currentElem.Parent.Type == generictype.Root.String() {
+		if genericType != generictype.Struct && genericType.Category() != typecategory.Reference {
+			currentElem.Error = RootKindErr
+			return
+		}
 	}
 
 	// Capture Go-specific attributes common to all types.
@@ -998,6 +1104,7 @@ func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem
 	native.Type = v.Kind().String()
 	native.Options.AddKeyVal("Type.Name", v.Type().Name())
 	native.Options.AddKeyVal("Type.Kind", v.Type().Kind().String())
+	native.Options.AddKeyVal("Type.PkgPath", v.Type().PkgPath())
 
 	// If type.Name differs from type.Kind, element is a TypeRef.
 	if v.Type().Name() != v.Type().Kind().String() {
@@ -1014,77 +1121,44 @@ func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem
 		ancestorTypeRef.Add(currentElem.TypeRef)
 	}
 
-	// Handle un-exported struct fields.
-	if s != nil && s.PkgPath != "" {
-		// Field is not exported and should generally be excluded from output.
-		native.Options.AddKeyVal("PkgPath", s.PkgPath)
-		currentElem.NativeDefault().Include = threeflag.False
-	}
-
-	// Parse struct tags.
-	if s != nil {
-		tags := ParseTags(s.Tag)
-		if len(tags) > 0 {
-			for tagName, tagVal := range tags {
-				tempNative := currentElem.Native[tagName]
-				if tempNative == nil {
-					tempNative = NewNativeType(tagName)
-					currentElem.Native[tagName] = tempNative
-				}
-				tempNative.UpdateFromTag(tagVal)
-			}
-		}
-	}
-
 	// Capture attributes that differ by type.
+	unhandledType := false
 	switch genericType.Category() {
 	case typecategory.Basic:
 		// Basic types are already handled by the default operations above. Nothing else to do here.
+	case typecategory.Known:
+		// Known types are already handled by the default operations above. However, TypeRef should be removed.
+		currentElem.TypeRef = ""
+		native.TypeRef = ""
 	case typecategory.Compound:
+		switch genericType {
 		// Compound types are reflected in their own functions. Capture ref list for processing below.
-		if genericType == generictype.List {
+		case generictype.List:
 			r.reflectTypeListImpl(ancestorTypeRef, currentElem, v, s)
-		} else if genericType == generictype.Struct {
+		case generictype.Struct:
 			r.reflectTypeStructImpl(ancestorTypeRef, currentElem, v, s)
+		default:
+			unhandledType = true
 		}
 
-	case typecategory.Interface:
-		// Interface is a special case which is either:
-		// - nil -- nil has no discernable type and is an error
-		// - a wrapper around another type -- ignore the interface and continue reflection with the wrapped type
-		if v.IsZero() {
-			// nil is an invalid element because its type cannot be determined
-			currentElem.Type = "invalid"
-			currentElem.Error = NilInterfaceErr
-			return
-		} else {
-			// Non-Zero interface is just an extra layer of abstraction around ancestorTypeRef real type.
-			// Reuse the current element in order to "skip" the interface element.
-			r.reflectTypeImpl(ancestorTypeRef.Copy(), currentElem, v.Elem(), nil)
-		}
-
-	case typecategory.Pointer:
-		// Pointer is a memory address pointing to some other type element.
-		native.Options.AddBool("IsNil", v.IsNil())
-
-		if currentElem.Error == "" {
-			// Get target of pointer.
-			var targetValue reflect.Value
-			if v.IsNil() {
-				// Create ancestorTypeRef new value if pointer is nil.
-				targetValue = reflect.New(v.Type().Elem()).Elem()
-			} else {
-				// Use existing value for valid pointer.
-				targetValue = v.Elem()
-			}
-
-			nextElem := currentElem.NewChild("")
-			r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
+	case typecategory.Reference:
+		switch genericType {
+		case generictype.Interface:
+			r.reflectTypeInterfaceImpl(ancestorTypeRef, currentElem, v, s)
+		case generictype.Pointer:
+			r.reflectTypePointerImpl(ancestorTypeRef, currentElem, v, s)
+		default:
+			unhandledType = true
 		}
 
 	default:
 		// This should never happen!!! Just break the chain.
 		panic(fmt.Sprintf("unexpected type category %q", genericType.Category()))
+	}
+
+	if unhandledType {
+		// This should never happen!!! Just break the chain.
+		panic(fmt.Sprintf("unexpected type %q", genericType))
 	}
 
 	// If current element is ancestorTypeRef named type, add to typeRefs.
@@ -1126,7 +1200,7 @@ func (r *Reflector) addTypeRef(currentElem *TypeElement) {
 	}
 
 	// Skip if the TypeRef has already been captured.
-	if r.typeResult.Refs.Get(currentElem.NativeDefault().TypeRef) != nil {
+	if r.typeResult.TypeRefs.ChildByName(currentElem.NativeDefault().TypeRef, nil) != nil {
 		return
 	}
 
@@ -1139,9 +1213,7 @@ func (r *Reflector) addTypeRef(currentElem *TypeElement) {
 
 	r.typeRefRecursion(refElem)
 
-	refRoot := NewRootElement()
-	refRoot.AddChild(refElem)
-	r.typeResult.Refs.Add(currentElem.NativeDefault().TypeRef, refRoot)
+	r.typeResult.TypeRefs.AddChild(refElem)
 }
 
 // typeRefRecursion is an internal recursive function to handle nested TypeRefs.
@@ -1161,8 +1233,52 @@ func (r *Reflector) typeRefRecursion(currentElem *TypeElement) {
 	}
 
 	// Keep current element and process children.
-	for _, childElem := range currentElem.Children.Elements() {
+	for _, childElem := range currentElem.Children {
 		r.typeRefRecursion(childElem)
+	}
+}
+
+// reflectTypeInterfaceImpl refects on interface types
+// Interface is a special case which is either:
+// - nil -- nil has no discernable type and is an error
+// - a wrapper around another type -- ignore the interface and continue reflection with the wrapped type
+func (r *Reflector) reflectTypeInterfaceImpl(ancestorTypeRef AncestorTypeRef, currentElem *TypeElement, v reflect.Value, s *reflect.StructField) {
+	if v.IsZero() {
+		// nil is an invalid element because its type cannot be determined
+		currentElem.Type = "invalid"
+		currentElem.Error = NilInterfaceErr
+		return
+	}
+
+	// Interface is nullable.
+	currentElem.Nullable = true
+
+	// Non-Zero interface is just an extra layer of abstraction around ancestorTypeRef real type.
+	// Reuse the current element in order to "skip" the interface element.
+	r.reflectTypeImpl(ancestorTypeRef.Copy(), currentElem, v.Elem(), nil)
+}
+
+// reflectTypePointerImpl refects on pointer types
+func (r *Reflector) reflectTypePointerImpl(ancestorTypeRef AncestorTypeRef, currentElem *TypeElement, v reflect.Value, s *reflect.StructField) {
+	// Pointer is a memory address pointing to some other type element.
+	currentElem.NativeDefault().Options.AddBool("IsNil", v.IsNil())
+
+	if currentElem.Error == "" {
+		// Get target of pointer.
+		var targetValue reflect.Value
+
+		if v.IsNil() {
+			// Create ancestorTypeRef new value if pointer is nil.
+			targetValue = reflect.New(v.Type().Elem()).Elem()
+		} else {
+			// Use existing value for valid pointer.
+			targetValue = v.Elem()
+		}
+
+		// Pointer is nullable.
+		currentElem.Nullable = true
+
+		r.reflectTypeImpl(ancestorTypeRef.Copy(), currentElem, targetValue, nil)
 	}
 }
 
@@ -1268,12 +1384,29 @@ func (r *Reflector) reflectTypeStructImpl(ancestorTypeRef AncestorTypeRef, curre
 				structField := v.Type().Field(i)
 				targetValue := v.Field(i)
 
-				// Count exported fields.
-				if structField.PkgPath == "" {
-					exportedFields++
+				// Skip un-exported fields.
+				if structField.PkgPath != "" {
+					continue
 				}
+				exportedFields++
 
 				nextElem := currentElem.NewChild(structField.Name)
+
+				// Parse struct tags.
+				if s != nil {
+					tags := ParseTags(s.Tag)
+					if len(tags) > 0 {
+						for tagName, tagVal := range tags {
+							tempNative := nextElem.Native[tagName]
+							if tempNative == nil {
+								tempNative = NewNativeType(tagName)
+								nextElem.Native[tagName] = tempNative
+							}
+							tempNative.UpdateFromTag(tagVal)
+						}
+					}
+				}
+
 				r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, &structField)
 			}
 

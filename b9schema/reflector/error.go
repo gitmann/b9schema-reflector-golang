@@ -3,6 +3,7 @@ package reflector
 // Errors for type reflection.
 const (
 	InvalidKindErr       = "kind not supported"
+	RootKindErr          = "root type must be a struct"
 	CyclicalReferenceErr = "cyclical reference"
 	NilInterfaceErr      = "interface element is nil"
 	EmptyStructErr       = "empty struct not supported"

@@ -3,18 +3,25 @@ package reflector
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
+	"time"
 	"unsafe"
+
+	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
 )
 
 var allTests = [][]TestCase{
-	//invalidTests,
-	specialTests,
+	rootJSONTests,
+	rootGoTests,
+
+	// invalidTests,
+	// specialTests,
 	//basicTests,
 	//arrayTests,
 	//sliceTests,
 	//mapTests,
-	//structTests,
+	// structTests,
 	//interfaceTests,
 	//pointerTests,
 	//jsonTests,
@@ -23,15 +30,113 @@ var allTests = [][]TestCase{
 type TestCase struct {
 	name  string
 	value interface{}
+
+	wantStrings []string
 }
 
 // *** All reflect types ***
 
-//Interface
-//Map
-//Ptr
-//Slice
-//Struct
+// rootTests validate that the top-level element is either a struct or Reference.
+var rootJSONTests = []TestCase{
+	{name: "json-null", value: fromJSON([]byte(`null`)), wantStrings: []string{"Root.!invalid! ERROR:kind not supported"}},
+
+	{name: "json-string", value: fromJSON([]byte(`"Hello"`)), wantStrings: []string{"Root.!string! ERROR:root type must be a struct"}},
+	{name: "json-int", value: fromJSON([]byte(`123`)), wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
+	{name: "json-float", value: fromJSON([]byte(`234.345`)), wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
+	{name: "json-bool", value: fromJSON([]byte(`true`)), wantStrings: []string{"Root.!boolean! ERROR:root type must be a struct"}},
+
+	{name: "json-list-empty", value: fromJSON([]byte(`[]`)), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+	{name: "json-list", value: fromJSON([]byte(`[1,2,3]`)), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+
+	{name: "json-object-empty", value: fromJSON([]byte(`{}`)), wantStrings: []string{"Root.!{}! ERROR:empty map not supported"}},
+
+	{
+		name:  "json-object",
+		value: fromJSON([]byte(`{"key1":"Hello"}`)),
+		wantStrings: []string{
+			"Root.{}",
+			"Root.{}.Key1:string",
+		},
+	},
+}
+
+var rootGoTests = []TestCase{
+	{name: "golang-nil", value: nil, wantStrings: []string{"Root.!invalid! ERROR:kind not supported"}},
+
+	{name: "golang-string", value: "Hello", wantStrings: []string{"Root.!string! ERROR:root type must be a struct"}},
+	{name: "golang-int", value: 123, wantStrings: []string{"Root.!integer! ERROR:root type must be a struct"}},
+	{name: "golang-float", value: 234.345, wantStrings: []string{"Root.!float! ERROR:root type must be a struct"}},
+	{name: "golang-bool", value: true, wantStrings: []string{"Root.!boolean! ERROR:root type must be a struct"}},
+
+	{name: "golang-array-0", value: [0]string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+	{name: "golang-array-3", value: [3]string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+
+	{name: "golang-slice-nil", value: func() interface{} { var s []string; return s }(), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+	{name: "golang-slice-0", value: []string{}, wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+	{name: "golang-slice-3", value: make([]string, 3), wantStrings: []string{"Root.![]! ERROR:root type must be a struct"}},
+
+	{name: "golang-struct-empty", value: func() interface{} { var s struct{}; return s }(), wantStrings: []string{"Root.!{}! ERROR:empty struct not supported"}},
+
+	{
+		name:  "golang-struct-noinit",
+		value: func() interface{} { var s StringStruct; return s }(),
+		wantStrings: []string{
+			"TypeRefs.StringStruct:{}",
+			"TypeRefs.StringStruct:{}.Value:string",
+			"Root.{}:StringStruct",
+			"Root.{}:StringStruct.Value:string",
+		},
+	},
+	{
+		name:  "golang-struct-init",
+		value: StringStruct{},
+		wantStrings: []string{
+			"TypeRefs.StringStruct:{}",
+			"TypeRefs.StringStruct:{}.Value:string",
+			"Root.{}:StringStruct",
+			"Root.{}:StringStruct.Value:string",
+		},
+	},
+	{
+		name:  "golang-struct-private",
+		value: PrivateStruct{},
+		wantStrings: []string{
+			"TypeRefs.!PrivateStruct:{}! ERROR:struct has no exported fields",
+			"Root.!{}:PrivateStruct! ERROR:struct has no exported fields",
+		},
+	},
+
+	{
+		name:  "golang-interface-struct-noinit",
+		value: func() interface{} { var s interface{} = StringStruct{}; return s }(),
+		wantStrings: []string{
+			"TypeRefs.StringStruct:{}",
+			"TypeRefs.StringStruct:{}.Value:string",
+			"Root.{}:StringStruct",
+			"Root.{}:StringStruct.Value:string",
+		},
+	},
+	{
+		name:  "golang-pointer-struct-noinit",
+		value: func() interface{} { var s *StringStruct; return s }(),
+		wantStrings: []string{
+			"TypeRefs.StringStruct:{}",
+			"TypeRefs.StringStruct:{}.Value:string",
+			"Root.{}:StringStruct",
+			"Root.{}:StringStruct.Value:string",
+		},
+	},
+	{
+		name:  "golang-pointer-struct-init",
+		value: &StringStruct{},
+		wantStrings: []string{
+			"TypeRefs.StringStruct:{}",
+			"TypeRefs.StringStruct:{}.Value:string",
+			"Root.{}:StringStruct",
+			"Root.{}:StringStruct.Value:string",
+		},
+	},
+}
 
 // Invalid types for shiny schemas.
 // - Invalid
@@ -113,13 +218,14 @@ var basicTests = []TestCase{
 	{name: "string-value", value: "hello"},
 }
 
-// Special types.
+// Special types from protobuf: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
 var specialTests = []TestCase{
-	{name: "[]byte-var", value: func() interface{} { var s []byte; return s }()},
-	{name: "[]byte-value", value: []byte(`hello`)},
+	// Duration
+	// {name: "duration-var", value: func() interface{} { var s time.Duration; return s }()},
+	// {name: "duration-value", value: time.Minute},
 
-	//{name: "datetime-var", value: func() interface{} { var s time.Time; return s }()},
-	//{name: "datetime-value", value: time.Now()},
+	// {name: "datetime-var", value: func() interface{} { var s time.Time; return s }()},
+	{name: "datetime-value", value: time.Now()},
 }
 
 // Array tests.
@@ -155,11 +261,11 @@ var mapTests = []TestCase{
 }
 
 var structTests = []TestCase{
-	{name: "struct-empty", value: func() interface{} { var g struct{}; return g }()},
-	{name: "PrivateStruct-nil", value: func() interface{} { var g PrivateStruct; return g }()},
+	// {name: "struct-empty", value: func() interface{} { var g struct{}; return g }()},
+	// {name: "PrivateStruct-nil", value: func() interface{} { var g PrivateStruct; return g }()},
 	{name: "BasicStruct-nil", value: func() interface{} { var g BasicStruct; return g }()},
-	{name: "CompoundStruct-nil", value: func() interface{} { var g CompoundStruct; return g }()},
-	{name: "CycleTest-nil", value: func() interface{} { var g CycleTest; return g }()},
+	// {name: "CompoundStruct-nil", value: func() interface{} { var g CompoundStruct; return g }()},
+	// {name: "CycleTest-nil", value: func() interface{} { var g CycleTest; return g }()},
 }
 
 var interfaceTests = []TestCase{
@@ -234,34 +340,6 @@ var testCases = []TestCase{
 	}},
 
 	{name: "NamedEntity, empty", value: &NamedEntity{}},
-}
-
-func runTests(t *testing.T, testCases []TestCase) {
-	r := NewReflector()
-
-	// Configure package-level settings.
-	PrintNative = true
-	PathPrefix = false
-	DeReference = false
-	ParseAsJSON = true
-
-	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			r.Reset()
-			//r.Label = test.name
-
-			gotResult := r.ReflectTypes(test.value)
-			fmt.Println(gotResult.String(""))
-
-			t.Logf("TEST_OK %s", test.name)
-		})
-	}
-}
-
-func TestReflector_AllTests(t *testing.T) {
-	for _, testCases := range allTests {
-		runTests(t, testCases)
-	}
 }
 
 // StringStruct has one string field.
@@ -518,5 +596,89 @@ func makeJSON(x interface{}) interface{} {
 		return fmt.Errorf("ERROR json.Marshal: %s", err)
 	} else {
 		return fromJSON(b)
+	}
+}
+
+// pathRender renders a PathString from a TypeElement.
+func pathRender(t *TypeElement) string {
+	return ""
+}
+
+// preRender renders a string from a TypeElement before Children are processed.
+func preRender(t *TypeElement, pathFunc PathStringRenderer) string {
+	if t.Type == generictype.Root.String() {
+		return ""
+	}
+
+	path := t.RenderPath(pathFunc)
+	out := path.String()
+	if t.Error != "" {
+		out += " ERROR:" + t.Error
+	}
+
+	return out
+}
+
+// postRender renders a string from a TypeElement after Children are processed.
+func postRender(t *TypeElement, pathFunc PathStringRenderer) string {
+	return ""
+}
+
+func runTests(t *testing.T, testCases []TestCase) {
+	r := NewReflector()
+
+	// Configure package-level settings.
+	PrintNative = true
+	PathPrefix = false
+	DeReference = false
+	ParseAsJSON = true
+
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			r.Reset()
+			//r.Label = test.name
+
+			gotResult := r.ReflectTypes(test.value)
+
+			// if b, err := json.MarshalIndent(gotResult, "", "  "); err != nil {
+			// 	t.Errorf("TEST_FAIL %s: json.Marshal err=%s", test.name, err)
+			// } else {
+			// 	fmt.Println(string(b))
+			// }
+
+			gotStrings := gotResult.RenderStrings(preRender, postRender, nil)
+			if !reflect.DeepEqual(gotStrings, test.wantStrings) {
+				t.Errorf("TEST_FAIL %s", test.name)
+
+				maxLen := len(gotStrings)
+				if len(test.wantStrings) > maxLen {
+					maxLen = len(test.wantStrings)
+				}
+
+				for i := 0; i < maxLen; i++ {
+					got := ""
+					if i < len(gotStrings) {
+						got = gotStrings[i]
+					}
+
+					want := ""
+					if i < len(test.wantStrings) {
+						want = test.wantStrings[i]
+					}
+
+					t.Logf("%05d got =%s", i, got)
+					t.Logf("      want=%s", want)
+				}
+
+			} else {
+				t.Logf("TEST_OK %s", test.name)
+			}
+		})
+	}
+}
+
+func TestReflector_AllTests(t *testing.T) {
+	for _, testCases := range allTests {
+		runTests(t, testCases)
 	}
 }
