@@ -32,9 +32,10 @@ type TestCase struct {
 	value interface{}
 
 	// Expected strings for reference and de-reference.
-	refStrings   []string
-	derefStrings []string
-	jsonStrings  []string
+	refStrings     []string
+	derefStrings   []string
+	jsonStrings    []string
+	openapiStrings []string
 }
 
 // *** All reflect types ***
@@ -322,30 +323,30 @@ var typeTests = []TestCase{
 		refStrings: []string{
 			`TypeRefs.IntegerTypes:{}`,
 			`TypeRefs.IntegerTypes:{}.Int:integer`,
-			`TypeRefs.IntegerTypes:{}.Int8:integer`,
 			`TypeRefs.IntegerTypes:{}.Int16:integer`,
 			`TypeRefs.IntegerTypes:{}.Int32:integer`,
 			`TypeRefs.IntegerTypes:{}.Int64:integer`,
+			`TypeRefs.IntegerTypes:{}.Int8:integer`,
 			`TypeRefs.IntegerTypes:{}.Uint:integer`,
-			`TypeRefs.IntegerTypes:{}.Uint8:integer`,
 			`TypeRefs.IntegerTypes:{}.Uint16:integer`,
 			`TypeRefs.IntegerTypes:{}.Uint32:integer`,
 			`TypeRefs.IntegerTypes:{}.Uint64:integer`,
+			`TypeRefs.IntegerTypes:{}.Uint8:integer`,
 			`TypeRefs.IntegerTypes:{}.Uintptr:integer`,
 			`Root.{}:IntegerTypes`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.Int:integer`,
-			`Root.{}.Int8:integer`,
 			`Root.{}.Int16:integer`,
 			`Root.{}.Int32:integer`,
 			`Root.{}.Int64:integer`,
+			`Root.{}.Int8:integer`,
 			`Root.{}.Uint:integer`,
-			`Root.{}.Uint8:integer`,
 			`Root.{}.Uint16:integer`,
 			`Root.{}.Uint32:integer`,
 			`Root.{}.Uint64:integer`,
+			`Root.{}.Uint8:integer`,
 			`Root.{}.Uintptr:integer`,
 		},
 	},
@@ -382,18 +383,18 @@ var typeTests = []TestCase{
 		value: InvalidTypes{},
 		refStrings: []string{
 			`TypeRefs.InvalidTypes:{}`,
-			`TypeRefs.InvalidTypes:{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
-			`TypeRefs.InvalidTypes:{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
 			`TypeRefs.InvalidTypes:{}.!Chan:invalid:chan! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
+			`TypeRefs.InvalidTypes:{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
 			`TypeRefs.InvalidTypes:{}.!Func:invalid:func! ERROR:kind not supported`,
 			`TypeRefs.InvalidTypes:{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
 			`Root.{}:InvalidTypes`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
-			`Root.{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
-			`Root.{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
 			`Root.{}.!Chan:invalid:chan! ERROR:kind not supported`,
+			`Root.{}.!Complex128:invalid:complex128! ERROR:kind not supported`,
+			`Root.{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
 			`Root.{}.!Func:invalid:func! ERROR:kind not supported`,
 			`Root.{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
 		},
@@ -409,8 +410,8 @@ var typeTests = []TestCase{
 			`TypeRefs.CompoundTypes:{}.Array3:[].string`,
 			`TypeRefs.CompoundTypes:{}.!Interface:invalid! ERROR:interface element is nil`,
 			`TypeRefs.CompoundTypes:{}.!Map:{}! ERROR:map key type must be string`,
-			`TypeRefs.CompoundTypes:{}.Ptr:{}:StringStruct`,
 			`TypeRefs.CompoundTypes:{}.PrivatePtr:{}:PrivateStruct`,
+			`TypeRefs.CompoundTypes:{}.Ptr:{}:StringStruct`,
 			`TypeRefs.CompoundTypes:{}.Slice:[]`,
 			`TypeRefs.CompoundTypes:{}.Slice:[].!invalid! ERROR:interface element is nil`,
 			`TypeRefs.CompoundTypes:{}.!Struct:{}! ERROR:empty struct not supported`,
@@ -427,9 +428,9 @@ var typeTests = []TestCase{
 			`Root.{}.Array3:[].string`,
 			`Root.{}.!Interface:invalid! ERROR:interface element is nil`,
 			`Root.{}.!Map:{}! ERROR:map key type must be string`,
+			`Root.{}.!PrivatePtr:{}! ERROR:struct has no exported fields`,
 			`Root.{}.Ptr:{}`,
 			`Root.{}.Ptr:{}.Value:string`,
-			`Root.{}.!PrivatePtr:{}! ERROR:struct has no exported fields`,
 			`Root.{}.Slice:[]`,
 			`Root.{}.Slice:[].!invalid! ERROR:interface element is nil`,
 			`Root.{}.!Struct:{}! ERROR:empty struct not supported`,
@@ -481,22 +482,22 @@ var listTests = []TestCase{
 			`TypeRefs.ArrayStruct:{}`,
 			`TypeRefs.ArrayStruct:{}.Array0:[]`,
 			`TypeRefs.ArrayStruct:{}.Array0:[].string`,
-			`TypeRefs.ArrayStruct:{}.Array3:[]`,
-			`TypeRefs.ArrayStruct:{}.Array3:[].string`,
 			`TypeRefs.ArrayStruct:{}.Array2_3:[]`,
 			`TypeRefs.ArrayStruct:{}.Array2_3:[].[]`,
 			`TypeRefs.ArrayStruct:{}.Array2_3:[].[].string`,
+			`TypeRefs.ArrayStruct:{}.Array3:[]`,
+			`TypeRefs.ArrayStruct:{}.Array3:[].string`,
 			`Root.{}:ArrayStruct`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.Array0:[]`,
 			`Root.{}.Array0:[].string`,
-			`Root.{}.Array3:[]`,
-			`Root.{}.Array3:[].string`,
 			`Root.{}.Array2_3:[]`,
 			`Root.{}.Array2_3:[].[]`,
 			`Root.{}.Array2_3:[].[].string`,
+			`Root.{}.Array3:[]`,
+			`Root.{}.Array3:[].string`,
 		},
 	},
 	{
@@ -528,20 +529,20 @@ var listTests = []TestCase{
 		value: &SliceStruct{},
 		refStrings: []string{
 			`TypeRefs.SliceStruct:{}`,
-			`TypeRefs.SliceStruct:{}.Slice:[]`,
-			`TypeRefs.SliceStruct:{}.Slice:[].string`,
 			`TypeRefs.SliceStruct:{}.Array2:[]`,
 			`TypeRefs.SliceStruct:{}.Array2:[].[]`,
 			`TypeRefs.SliceStruct:{}.Array2:[].[].string`,
+			`TypeRefs.SliceStruct:{}.Slice:[]`,
+			`TypeRefs.SliceStruct:{}.Slice:[].string`,
 			`Root.{}:SliceStruct`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
-			`Root.{}.Slice:[]`,
-			`Root.{}.Slice:[].string`,
 			`Root.{}.Array2:[]`,
 			`Root.{}.Array2:[].[]`,
 			`Root.{}.Array2:[].[].string`,
+			`Root.{}.Slice:[]`,
+			`Root.{}.Slice:[].string`,
 		},
 	},
 }
@@ -589,10 +590,9 @@ var compoundTests = []TestCase{
 		refStrings: []string{
 			`TypeRefs.MapTestsStruct:{}`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}`,
-			`TypeRefs.MapTestsStruct:{}.MapOK:{}.StringVal:string`,
-			`TypeRefs.MapTestsStruct:{}.MapOK:{}.IntVal:float`,
-			`TypeRefs.MapTestsStruct:{}.MapOK:{}.FloatVal:float`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.BoolVal:boolean`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.FloatVal:float`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.IntVal:float`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.ListVal:[]`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.ListVal:[].float`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}`,
@@ -600,15 +600,15 @@ var compoundTests = []TestCase{
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
 			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.StringVal:string`,
 			`Root.{}:MapTestsStruct`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.MapOK:{}`,
-			`Root.{}.MapOK:{}.StringVal:string`,
-			`Root.{}.MapOK:{}.IntVal:float`,
-			`Root.{}.MapOK:{}.FloatVal:float`,
 			`Root.{}.MapOK:{}.BoolVal:boolean`,
+			`Root.{}.MapOK:{}.FloatVal:float`,
+			`Root.{}.MapOK:{}.IntVal:float`,
 			`Root.{}.MapOK:{}.ListVal:[]`,
 			`Root.{}.MapOK:{}.ListVal:[].float`,
 			`Root.{}.MapOK:{}.MapVal:{}`,
@@ -616,6 +616,7 @@ var compoundTests = []TestCase{
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}`,
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+			`Root.{}.MapOK:{}.StringVal:string`,
 		},
 	},
 	{
@@ -667,28 +668,28 @@ var referenceTests = []TestCase{
 		refStrings: []string{
 			`TypeRefs.BasicStruct:{}`,
 			`TypeRefs.BasicStruct:{}.BoolVal:boolean`,
-			`TypeRefs.BasicStruct:{}.IntVal:integer`,
 			`TypeRefs.BasicStruct:{}.Float64Val:float`,
+			`TypeRefs.BasicStruct:{}.IntVal:integer`,
 			`TypeRefs.BasicStruct:{}.StringVal:string`,
 			`TypeRefs.ReferenceTestsStruct:{}`,
 			`TypeRefs.ReferenceTestsStruct:{}.!InterfaceVal:invalid! ERROR:interface element is nil`,
-			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
 			`TypeRefs.ReferenceTestsStruct:{}.PtrPtrVal:{}:BasicStruct`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
 			`Root.{}:ReferenceTestsStruct`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.!InterfaceVal:invalid! ERROR:interface element is nil`,
-			`Root.{}.PtrVal:{}`,
-			`Root.{}.PtrVal:{}.BoolVal:boolean`,
-			`Root.{}.PtrVal:{}.IntVal:integer`,
-			`Root.{}.PtrVal:{}.Float64Val:float`,
-			`Root.{}.PtrVal:{}.StringVal:string`,
 			`Root.{}.PtrPtrVal:{}`,
 			`Root.{}.PtrPtrVal:{}.BoolVal:boolean`,
-			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
 			`Root.{}.PtrPtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
 			`Root.{}.PtrPtrVal:{}.StringVal:string`,
+			`Root.{}.PtrVal:{}`,
+			`Root.{}.PtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrVal:{}.StringVal:string`,
 		},
 	},
 	{
@@ -697,32 +698,32 @@ var referenceTests = []TestCase{
 		refStrings: []string{
 			`TypeRefs.BasicStruct:{}`,
 			`TypeRefs.BasicStruct:{}.BoolVal:boolean`,
-			`TypeRefs.BasicStruct:{}.IntVal:integer`,
 			`TypeRefs.BasicStruct:{}.Float64Val:float`,
+			`TypeRefs.BasicStruct:{}.IntVal:integer`,
 			`TypeRefs.BasicStruct:{}.StringVal:string`,
 			`TypeRefs.ReferenceTestsStruct:{}`,
 			`TypeRefs.ReferenceTestsStruct:{}.InterfaceVal:{}:BasicStruct`,
-			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
 			`TypeRefs.ReferenceTestsStruct:{}.PtrPtrVal:{}:BasicStruct`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
 			`Root.{}:ReferenceTestsStruct`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.InterfaceVal:{}`,
 			`Root.{}.InterfaceVal:{}.BoolVal:boolean`,
-			`Root.{}.InterfaceVal:{}.IntVal:integer`,
 			`Root.{}.InterfaceVal:{}.Float64Val:float`,
+			`Root.{}.InterfaceVal:{}.IntVal:integer`,
 			`Root.{}.InterfaceVal:{}.StringVal:string`,
-			`Root.{}.PtrVal:{}`,
-			`Root.{}.PtrVal:{}.BoolVal:boolean`,
-			`Root.{}.PtrVal:{}.IntVal:integer`,
-			`Root.{}.PtrVal:{}.Float64Val:float`,
-			`Root.{}.PtrVal:{}.StringVal:string`,
 			`Root.{}.PtrPtrVal:{}`,
 			`Root.{}.PtrPtrVal:{}.BoolVal:boolean`,
-			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
 			`Root.{}.PtrPtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
 			`Root.{}.PtrPtrVal:{}.StringVal:string`,
+			`Root.{}.PtrVal:{}`,
+			`Root.{}.PtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrVal:{}.StringVal:string`,
 		},
 	},
 }
@@ -761,72 +762,64 @@ var cycleTests = []TestCase{
 		value: &CycleTest{},
 		refStrings: []string{
 			`TypeRefs.AStruct:{}`,
-			`TypeRefs.AStruct:{}.AName:string`,
 			`TypeRefs.AStruct:{}.AChild:{}:BStruct`,
+			`TypeRefs.AStruct:{}.AName:string`,
 			`TypeRefs.BStruct:{}`,
-			`TypeRefs.BStruct:{}.BName:string`,
 			`TypeRefs.BStruct:{}.BChild:{}:CStruct`,
+			`TypeRefs.BStruct:{}.BName:string`,
 			`TypeRefs.CStruct:{}`,
-			`TypeRefs.CStruct:{}.CName:string`,
 			`TypeRefs.CStruct:{}.CChild:{}:AStruct`,
+			`TypeRefs.CStruct:{}.CName:string`,
 			`TypeRefs.CycleTest:{}`,
-			`TypeRefs.CycleTest:{}.Level:integer`,
 			`TypeRefs.CycleTest:{}.CycleA:{}:AStruct`,
 			`TypeRefs.CycleTest:{}.CycleB:{}:BStruct`,
 			`TypeRefs.CycleTest:{}.CycleC:{}`,
 			`TypeRefs.CycleTest:{}.CycleC:{}.C:{}:CStruct`,
+			`TypeRefs.CycleTest:{}.Level:integer`,
 			`Root.{}:CycleTest`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
-			`Root.{}.Level:integer`,
 			`Root.{}.CycleA:{}`,
-			`Root.{}.CycleA:{}.AName:string`,
 			`Root.{}.CycleA:{}.AChild:{}`,
-			`Root.{}.CycleA:{}.AChild:{}.BName:string`,
 			`Root.{}.CycleA:{}.AChild:{}.BChild:{}`,
-			`Root.{}.CycleA:{}.AChild:{}.BChild:{}.CName:string`,
 			`Root.{}.CycleA:{}.AChild:{}.BChild:{}.!CChild:{}:AStruct! ERROR:cyclical reference`,
+			`Root.{}.CycleA:{}.AChild:{}.BChild:{}.CName:string`,
+			`Root.{}.CycleA:{}.AChild:{}.BName:string`,
+			`Root.{}.CycleA:{}.AName:string`,
 			`Root.{}.CycleB:{}`,
-			`Root.{}.CycleB:{}.BName:string`,
 			`Root.{}.CycleB:{}.BChild:{}`,
-			`Root.{}.CycleB:{}.BChild:{}.CName:string`,
 			`Root.{}.CycleB:{}.BChild:{}.CChild:{}`,
-			`Root.{}.CycleB:{}.BChild:{}.CChild:{}.AName:string`,
 			`Root.{}.CycleB:{}.BChild:{}.CChild:{}.!AChild:{}:BStruct! ERROR:cyclical reference`,
+			`Root.{}.CycleB:{}.BChild:{}.CChild:{}.AName:string`,
+			`Root.{}.CycleB:{}.BChild:{}.CName:string`,
+			`Root.{}.CycleB:{}.BName:string`,
 			`Root.{}.CycleC:{}`,
 			`Root.{}.CycleC:{}.C:{}`,
-			`Root.{}.CycleC:{}.C:{}.CName:string`,
 			`Root.{}.CycleC:{}.C:{}.CChild:{}`,
-			`Root.{}.CycleC:{}.C:{}.CChild:{}.AName:string`,
 			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}`,
-			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.BName:string`,
 			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.!BChild:{}:CStruct! ERROR:cyclical reference`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.BName:string`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AName:string`,
+			`Root.{}.CycleC:{}.C:{}.CName:string`,
+			`Root.{}.Level:integer`,
 		},
 		jsonStrings: []string{
-			`$.{}`,
-			`$.{}.cycleA:{}`,
-			`$.{}.cycleA:{}.aName:string`,
-			`$.{}.cycleA:{}.aChild:{}`,
-			`$.{}.cycleA:{}.aChild:{}.bName:string`,
-			`$.{}.cycleA:{}.aChild:{}.bChild:{}`,
-			`$.{}.cycleA:{}.aChild:{}.bChild:{}.cName:string`,
-			`$.{}.cycleA:{}.aChild:{}.bChild:{}.!cChild:{}:AStruct! ERROR:cyclical reference`,
-			`$.{}.cycleB:{}`,
-			`$.{}.cycleB:{}.bName:string`,
-			`$.{}.cycleB:{}.bChild:{}`,
-			`$.{}.cycleB:{}.bChild:{}.cName:string`,
-			`$.{}.cycleB:{}.bChild:{}.cChild:{}`,
-			`$.{}.cycleB:{}.bChild:{}.cChild:{}.aName:string`,
-			`$.{}.cycleB:{}.bChild:{}.cChild:{}.!aChild:{}:BStruct! ERROR:cyclical reference`,
-			`$.{}.CycleC:{}`,
-			`$.{}.CycleC:{}.c:{}`,
-			`$.{}.CycleC:{}.c:{}.cName:string`,
-			`$.{}.CycleC:{}.c:{}.cChild:{}`,
-			`$.{}.CycleC:{}.c:{}.cChild:{}.aName:string`,
-			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}`,
-			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}.bName:string`,
-			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}.!bChild:{}:CStruct! ERROR:cyclical reference`,
+			`definitions.cycleA:{}`,
+			`definitions.cycleA:{}.aChild:{}:BStruct`,
+			`definitions.cycleA:{}.aName:string`,
+			`definitions.aChild:{}`,
+			`definitions.aChild:{}.bChild:{}:CStruct`,
+			`definitions.aChild:{}.bName:string`,
+			`definitions.bChild:{}`,
+			`definitions.bChild:{}.cChild:{}:AStruct`,
+			`definitions.bChild:{}.cName:string`,
+			`definitions.CycleTest:{}`,
+			`definitions.CycleTest:{}.cycleA:{}:AStruct`,
+			`definitions.CycleTest:{}.cycleB:{}:BStruct`,
+			`definitions.CycleTest:{}.CycleC:{}`,
+			`definitions.CycleTest:{}.CycleC:{}.c:{}:CStruct`,
+			`$.{}:CycleTest`,
 		},
 	},
 }
@@ -844,24 +837,28 @@ var jsonTagTests = []TestCase{
 		value: JSONTagTests{},
 		refStrings: []string{
 			`TypeRefs.JSONTagTests:{}`,
-			`TypeRefs.JSONTagTests:{}.NoTag:string`,
 			`TypeRefs.JSONTagTests:{}.ExcludeTag:string`,
+			`TypeRefs.JSONTagTests:{}.NoTag:string`,
 			`TypeRefs.JSONTagTests:{}.RenameOne:string`,
 			`TypeRefs.JSONTagTests:{}.RenameTwo:string`,
 			`Root.{}:JSONTagTests`,
 		},
 		derefStrings: []string{
 			`Root.{}`,
-			`Root.{}.NoTag:string`,
 			`Root.{}.ExcludeTag:string`,
+			`Root.{}.NoTag:string`,
 			`Root.{}.RenameOne:string`,
 			`Root.{}.RenameTwo:string`,
 		},
 		jsonStrings: []string{
-			`$.{}`,
-			`$.{}.NoTag:string`,
-			`$.{}.renameOne:string`,
-			`$.{}.something:string`,
+			`definitions.JSONTagTests:{}`,
+			`definitions.JSONTagTests:{}.NoTag:string`,
+			`definitions.JSONTagTests:{}.renameOne:string`,
+			`definitions.JSONTagTests:{}.something:string`,
+			`$.{}:JSONTagTests`,
+		},
+		openapiStrings: []string{
+			`definitions.JSONTagTests:{}`,
 		},
 	},
 }
@@ -1138,8 +1135,15 @@ func makeJSON(x interface{}) interface{} {
 func jsonPathRender(t *TypeElement, opt *RenderOptions) string {
 	// Check root.
 	if t.Type == generictype.Root.String() {
-		// JSON Path root is "$"
-		return "$"
+		switch t.Name {
+		case "Root":
+			// JSON Path root is "$"
+			return "$"
+		case "TypeRefs":
+			return "definitions"
+		default:
+			return t.Name
+		}
 	}
 
 	jsonType := t.GetNativeType("json")
@@ -1162,9 +1166,10 @@ func jsonPathRender(t *TypeElement, opt *RenderOptions) string {
 	}
 
 	// Add TypeRef suffix if set but not if de-referencing.
-	// NOTE: json never uses references!
 	refPart := ""
-	if opt.DeReference && t.Error == CyclicalReferenceErr {
+	if !opt.DeReference {
+		refPart = jsonType.TypeRef
+	} else if opt.DeReference && t.Error == CyclicalReferenceErr {
 		// Keep reference if it's a cyclical error.
 		refPart = jsonType.TypeRef
 	}
@@ -1292,7 +1297,7 @@ func runTests(t *testing.T, testCases []TestCase) {
 
 		// Test json dialect.
 		if len(test.jsonStrings) > 0 {
-			opt.DeReference = true
+			opt.DeReference = false
 			gotStrings := gotResult.RenderStrings(jsonPreRender, postRender, jsonPathRender, opt)
 			wantStrings := test.jsonStrings
 

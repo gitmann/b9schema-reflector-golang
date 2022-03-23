@@ -395,8 +395,12 @@ func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pat
 	if !opt.DeReference && t.TypeRef != "" {
 		// Skip children.
 	} else {
-		for _, childElem := range t.Children {
-			rendered := childElem.RenderStrings(preFunc, postFunc, pathFunc, opt)
+		// Always process children in alphabetical order.
+		typeRefMap := t.ChildMap()
+		typeRefKeys := t.ChildKeys(typeRefMap)
+
+		for _, childName := range typeRefKeys {
+			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc, opt)
 			for _, r := range rendered {
 				if r != "" {
 					out = append(out, r)
