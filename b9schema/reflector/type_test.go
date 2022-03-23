@@ -12,19 +12,16 @@ import (
 )
 
 var allTests = [][]TestCase{
-	rootJSONTests,
-	rootGoTests,
-	typeTests,
+	// rootJSONTests,
+	// rootGoTests,
+	// typeTests,
+	// listTests,
+	// compoundTests,
+	// referenceTests,
+	cycleTests,
 
-	// specialTests,
-	//basicTests,
-	//arrayTests,
-	//sliceTests,
-	//mapTests,
 	// structTests,
-	//interfaceTests,
-	//pointerTests,
-	//jsonTests,
+	// pointerTests,
 }
 
 type TestCase struct {
@@ -284,21 +281,23 @@ type InvalidTypes struct {
 	UnsafePointer unsafe.Pointer
 }
 
-type AllTypes struct {
-	Array [3]string
-	// Interface     interface{}
-	// Map           map[int]int
-	// Ptr           *PrivateStruct
-	// Slice         []interface{}
-	// Struct        struct{}
+type CompoundTypes struct {
+	Array0 [0]string
+	Array3 [3]string
+
+	Interface  interface{}
+	Map        map[int]int
+	Ptr        *StringStruct
+	PrivatePtr *PrivateStruct
+	Slice      []interface{}
+	Struct     struct{}
 }
 
-// - Invalid
-// - Complex64
-// - Complex128
-// - Chan
-// - Func
-// - UnsafePointer
+// Special types from protobuf: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
+type SpecialTypes struct {
+	DateTime time.Time
+}
+
 var typeTests = []TestCase{
 	{
 		name:  "boolean",
@@ -395,111 +394,412 @@ var typeTests = []TestCase{
 			`Root.{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
 		},
 	},
+	{
+		name:  "compound",
+		value: CompoundTypes{},
+		refStrings: []string{
+			`TypeRefs.CompoundTypes:{}`,
+			`TypeRefs.CompoundTypes:{}.Array0:[]`,
+			`TypeRefs.CompoundTypes:{}.Array0:[].string`,
+			`TypeRefs.CompoundTypes:{}.Array3:[]`,
+			`TypeRefs.CompoundTypes:{}.Array3:[].string`,
+			`TypeRefs.CompoundTypes:{}.!Interface:invalid! ERROR:interface element is nil`,
+			`TypeRefs.CompoundTypes:{}.!Map:{}! ERROR:map key type must be string`,
+			`TypeRefs.CompoundTypes:{}.Ptr:{}:StringStruct`,
+			`TypeRefs.CompoundTypes:{}.PrivatePtr:{}:PrivateStruct`,
+			`TypeRefs.CompoundTypes:{}.Slice:[]`,
+			`TypeRefs.CompoundTypes:{}.Slice:[].!invalid! ERROR:interface element is nil`,
+			`TypeRefs.CompoundTypes:{}.!Struct:{}! ERROR:empty struct not supported`,
+			`TypeRefs.!PrivateStruct:{}! ERROR:struct has no exported fields`,
+			`TypeRefs.StringStruct:{}`,
+			`TypeRefs.StringStruct:{}.Value:string`,
+			`Root.{}:CompoundTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Array0:[]`,
+			`Root.{}.Array0:[].string`,
+			`Root.{}.Array3:[]`,
+			`Root.{}.Array3:[].string`,
+			`Root.{}.!Interface:invalid! ERROR:interface element is nil`,
+			`Root.{}.!Map:{}! ERROR:map key type must be string`,
+			`Root.{}.Ptr:{}`,
+			`Root.{}.Ptr:{}.Value:string`,
+			`Root.{}.!PrivatePtr:{}! ERROR:struct has no exported fields`,
+			`Root.{}.Slice:[]`,
+			`Root.{}.Slice:[].!invalid! ERROR:interface element is nil`,
+			`Root.{}.!Struct:{}! ERROR:empty struct not supported`,
+		},
+	},
+	{
+		name:  "special",
+		value: SpecialTypes{},
+		refStrings: []string{
+			`TypeRefs.SpecialTypes:{}`,
+			`TypeRefs.SpecialTypes:{}.DateTime:datetime`,
+			`Root.{}:SpecialTypes`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.DateTime:datetime`,
+		},
+	},
 }
 
-// Basic types for shiny schemas.
-//Bool
-//Int
-//Int8
-//Int16
-//Int32
-//Int64
-//Uint
-//Uint8
-//Uint16
-//Uint32
-//Uint64
-//Uintptr
-//Float32
-//Float64
-//String
-var basicTests = []TestCase{
-	{name: "bool-var", value: func() interface{} { var s bool; return s }()},
-	{name: "bool-value", value: true},
-
-	{name: "int-var", value: func() interface{} { var s int; return s }()},
-	{name: "int-value", value: int(123)},
-
-	{name: "int8-var", value: func() interface{} { var s int8; return s }()},
-	{name: "int8-value", value: int8(123)},
-
-	{name: "int16-var", value: func() interface{} { var s int16; return s }()},
-	{name: "int16-value", value: int16(123)},
-
-	{name: "int32-var", value: func() interface{} { var s int32; return s }()},
-	{name: "int32-value", value: int32(123)},
-
-	{name: "int64-var", value: func() interface{} { var s int64; return s }()},
-	{name: "int64-value", value: int64(123)},
-
-	{name: "uint-var", value: func() interface{} { var s uint; return s }()},
-	{name: "uint-value", value: uint(123)},
-
-	{name: "uint8-var", value: func() interface{} { var s uint8; return s }()},
-	{name: "uint8-value", value: uint8(123)},
-
-	{name: "int16-var", value: func() interface{} { var s int16; return s }()},
-	{name: "int16-value", value: int16(123)},
-
-	{name: "int32-var", value: func() interface{} { var s int32; return s }()},
-	{name: "int32-value", value: int32(123)},
-
-	{name: "uint64-var", value: func() interface{} { var s uint64; return s }()},
-	{name: "uint64-value", value: uint64(123)},
-
-	{name: "uintptr-var", value: func() interface{} { var s uintptr; return s }()},
-	{name: "uintptr-value", value: uintptr(123)},
-
-	{name: "float32-var", value: func() interface{} { var s float32; return s }()},
-	{name: "float32-value", value: float32(234.345)},
-
-	{name: "float64-var", value: func() interface{} { var s float64; return s }()},
-	{name: "float64-value", value: float64(234.345)},
-
-	{name: "string-var", value: func() interface{} { var s string; return s }()},
-	{name: "string-value", value: "hello"},
+type ArrayStruct struct {
+	Array0   [0]string
+	Array3   [3]string
+	Array2_3 [2][3]string
 }
 
-// Special types from protobuf: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf
-var specialTests = []TestCase{
-	// Duration
-	// {name: "duration-var", value: func() interface{} { var s time.Duration; return s }()},
-	// {name: "duration-value", value: time.Minute},
-
-	// {name: "datetime-var", value: func() interface{} { var s time.Time; return s }()},
-	{name: "datetime-value", value: time.Now()},
+type SliceStruct struct {
+	Slice  []string
+	Array2 [][]string
 }
+
+var jsonArrayTest = `
+{
+	"Array0": [],
+	"Array3": ["a","b","c"],
+	"Array2_3": [
+		[1,2,3],
+		[2,3,4]
+	]
+}
+`
 
 // Array tests.
-var arrayTests = []TestCase{
-	{name: "[0]string-var", value: func() interface{} { var s [0]string; return s }()},
-	{name: "[0]string-nil", value: [0]string{}},
-
-	{name: "[3]string-var", value: func() interface{} { var s [3]string; return s }()},
-	{name: "[3]string-nil", value: [3]string{}},
-	{name: "[3]string-value", value: [3]string{"hello", "hey", "hi"}},
-
-	{name: "[2][3]string-var", value: func() interface{} { var s [2][3]string; return s }()},
-	{name: "[2][3]string-nil", value: [2][3]string{}},
-	{name: "[2][3]string-value", value: [2][3]string{[3]string{"hello", "hey", "hi"}}},
+var listTests = []TestCase{
+	{
+		name:  "arrays",
+		value: &ArrayStruct{},
+		refStrings: []string{
+			`TypeRefs.ArrayStruct:{}`,
+			`TypeRefs.ArrayStruct:{}.Array0:[]`,
+			`TypeRefs.ArrayStruct:{}.Array0:[].string`,
+			`TypeRefs.ArrayStruct:{}.Array3:[]`,
+			`TypeRefs.ArrayStruct:{}.Array3:[].string`,
+			`TypeRefs.ArrayStruct:{}.Array2_3:[]`,
+			`TypeRefs.ArrayStruct:{}.Array2_3:[].[]`,
+			`TypeRefs.ArrayStruct:{}.Array2_3:[].[].string`,
+			`Root.{}:ArrayStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Array0:[]`,
+			`Root.{}.Array0:[].string`,
+			`Root.{}.Array3:[]`,
+			`Root.{}.Array3:[].string`,
+			`Root.{}.Array2_3:[]`,
+			`Root.{}.Array2_3:[].[]`,
+			`Root.{}.Array2_3:[].[].string`,
+		},
+	},
+	{
+		name:  "json-array",
+		value: fromJSON([]byte(jsonArrayTest)),
+		refStrings: []string{
+			`Root.{}`,
+			`Root.{}.Array0:[]`,
+			`Root.{}.Array0:[].!invalid! ERROR:interface element is nil`,
+			`Root.{}.Array2_3:[]`,
+			`Root.{}.Array2_3:[].[]`,
+			`Root.{}.Array2_3:[].[].float`,
+			`Root.{}.Array3:[]`,
+			`Root.{}.Array3:[].string`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Array0:[]`,
+			`Root.{}.Array0:[].!invalid! ERROR:interface element is nil`,
+			`Root.{}.Array2_3:[]`,
+			`Root.{}.Array2_3:[].[]`,
+			`Root.{}.Array2_3:[].[].float`,
+			`Root.{}.Array3:[]`,
+			`Root.{}.Array3:[].string`,
+		},
+	},
+	{
+		name:  "slices",
+		value: &SliceStruct{},
+		refStrings: []string{
+			`TypeRefs.SliceStruct:{}`,
+			`TypeRefs.SliceStruct:{}.Slice:[]`,
+			`TypeRefs.SliceStruct:{}.Slice:[].string`,
+			`TypeRefs.SliceStruct:{}.Array2:[]`,
+			`TypeRefs.SliceStruct:{}.Array2:[].[]`,
+			`TypeRefs.SliceStruct:{}.Array2:[].[].string`,
+			`Root.{}:SliceStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Slice:[]`,
+			`Root.{}.Slice:[].string`,
+			`Root.{}.Array2:[]`,
+			`Root.{}.Array2:[].[]`,
+			`Root.{}.Array2:[].[].string`,
+		},
+	},
 }
 
-// Slice tests.
-var sliceTests = []TestCase{
-	{name: "[]string-var", value: func() interface{} { var s []string; return s }()},
-	{name: "[]string-nil", value: ([]string)(nil)},
-	{name: "[]string-empty", value: []string{}},
-	{name: "[]string-value", value: []string{"hello", "hey", "hi"}},
-	{name: "[][]string-value", value: [][]string{[]string{"hello", "hey", "hi"}}},
+type MapTestsStruct struct {
+	MapOK struct {
+		StringVal string
+		IntVal    float64
+		FloatVal  float32
+		BoolVal   bool
+		ListVal   []float64
+		MapVal    struct {
+			Key1 string
+			Key2 struct {
+				DeepKey1 string
+				DeepKey2 float64
+			}
+		}
+	}
 }
 
-var mapTests = []TestCase{
-	{name: "map[StringStruct]bool-nil", value: func() interface{} { var s map[StringStruct]bool; return s }()},
-	{name: "map[string]bool-nil", value: func() interface{} { var s map[string]bool; return s }()},
-	{name: "map[string]bool-empty", value: map[string]bool{}},
-	{name: "map[string]bool-value", value: map[string]bool{"One": true, "two": false, "Three": false, "four": true}},
-	{name: "map[string]interface-value", value: map[string]interface{}{"One": true, "two": false, "Three": false, "four": true}},
-	{name: "map[string]map[string]bool-empty", value: map[string]map[string]bool{}},
+var jsonMapTests = `
+{
+	"MapOK": {
+		"StringVal": "Hello",
+		"IntVal": 123,
+		"FloatVal": 234.345,
+		"BoolVal": true,
+		"ListVal": [2,3,4,5],
+		"MapVal": {
+			"Key1": "Hey",
+			"Key2": {
+				"DeepKey1": "Hi",
+				"DeepKey2": 234
+			}
+		}
+	}
+}
+`
+
+var compoundTests = []TestCase{
+	{
+		name:  "golang-map",
+		value: MapTestsStruct{},
+		refStrings: []string{
+			`TypeRefs.MapTestsStruct:{}`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.StringVal:string`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.IntVal:float`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.FloatVal:float`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.BoolVal:boolean`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.ListVal:[]`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.ListVal:[].float`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key1:string`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
+			`TypeRefs.MapTestsStruct:{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+			`Root.{}:MapTestsStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.MapOK:{}`,
+			`Root.{}.MapOK:{}.StringVal:string`,
+			`Root.{}.MapOK:{}.IntVal:float`,
+			`Root.{}.MapOK:{}.FloatVal:float`,
+			`Root.{}.MapOK:{}.BoolVal:boolean`,
+			`Root.{}.MapOK:{}.ListVal:[]`,
+			`Root.{}.MapOK:{}.ListVal:[].float`,
+			`Root.{}.MapOK:{}.MapVal:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+		},
+	},
+	{
+		name:  "json-map",
+		value: fromJSON([]byte(jsonMapTests)),
+		refStrings: []string{
+			`Root.{}`,
+			`Root.{}.MapOK:{}`,
+			`Root.{}.MapOK:{}.BoolVal:boolean`,
+			`Root.{}.MapOK:{}.FloatVal:float`,
+			`Root.{}.MapOK:{}.IntVal:float`,
+			`Root.{}.MapOK:{}.ListVal:[]`,
+			`Root.{}.MapOK:{}.ListVal:[].float`,
+			`Root.{}.MapOK:{}.MapVal:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+			`Root.{}.MapOK:{}.StringVal:string`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.MapOK:{}`,
+			`Root.{}.MapOK:{}.BoolVal:boolean`,
+			`Root.{}.MapOK:{}.FloatVal:float`,
+			`Root.{}.MapOK:{}.IntVal:float`,
+			`Root.{}.MapOK:{}.ListVal:[]`,
+			`Root.{}.MapOK:{}.ListVal:[].float`,
+			`Root.{}.MapOK:{}.MapVal:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
+			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
+			`Root.{}.MapOK:{}.StringVal:string`,
+		},
+	},
+}
+
+type ReferenceTestsStruct struct {
+	InterfaceVal interface{}
+	PtrVal       *BasicStruct
+	PtrPtrVal    **BasicStruct
+}
+
+var referenceTests = []TestCase{
+	{
+		name:  "reference-tests-empty",
+		value: ReferenceTestsStruct{},
+		refStrings: []string{
+			`TypeRefs.BasicStruct:{}`,
+			`TypeRefs.BasicStruct:{}.BoolVal:boolean`,
+			`TypeRefs.BasicStruct:{}.IntVal:integer`,
+			`TypeRefs.BasicStruct:{}.Float64Val:float`,
+			`TypeRefs.BasicStruct:{}.StringVal:string`,
+			`TypeRefs.ReferenceTestsStruct:{}`,
+			`TypeRefs.ReferenceTestsStruct:{}.!InterfaceVal:invalid! ERROR:interface element is nil`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrPtrVal:{}:BasicStruct`,
+			`Root.{}:ReferenceTestsStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.!InterfaceVal:invalid! ERROR:interface element is nil`,
+			`Root.{}.PtrVal:{}`,
+			`Root.{}.PtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrVal:{}.StringVal:string`,
+			`Root.{}.PtrPtrVal:{}`,
+			`Root.{}.PtrPtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrPtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrPtrVal:{}.StringVal:string`,
+		},
+	},
+	{
+		name:  "reference-tests-init",
+		value: ReferenceTestsStruct{InterfaceVal: &BasicStruct{}},
+		refStrings: []string{
+			`TypeRefs.BasicStruct:{}`,
+			`TypeRefs.BasicStruct:{}.BoolVal:boolean`,
+			`TypeRefs.BasicStruct:{}.IntVal:integer`,
+			`TypeRefs.BasicStruct:{}.Float64Val:float`,
+			`TypeRefs.BasicStruct:{}.StringVal:string`,
+			`TypeRefs.ReferenceTestsStruct:{}`,
+			`TypeRefs.ReferenceTestsStruct:{}.InterfaceVal:{}:BasicStruct`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrVal:{}:BasicStruct`,
+			`TypeRefs.ReferenceTestsStruct:{}.PtrPtrVal:{}:BasicStruct`,
+			`Root.{}:ReferenceTestsStruct`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.InterfaceVal:{}`,
+			`Root.{}.InterfaceVal:{}.BoolVal:boolean`,
+			`Root.{}.InterfaceVal:{}.IntVal:integer`,
+			`Root.{}.InterfaceVal:{}.Float64Val:float`,
+			`Root.{}.InterfaceVal:{}.StringVal:string`,
+			`Root.{}.PtrVal:{}`,
+			`Root.{}.PtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrVal:{}.StringVal:string`,
+			`Root.{}.PtrPtrVal:{}`,
+			`Root.{}.PtrPtrVal:{}.BoolVal:boolean`,
+			`Root.{}.PtrPtrVal:{}.IntVal:integer`,
+			`Root.{}.PtrPtrVal:{}.Float64Val:float`,
+			`Root.{}.PtrPtrVal:{}.StringVal:string`,
+		},
+	},
+}
+
+// Test cyclical relationships:
+// A --> B --> C --> A
+type AStruct struct {
+	AName  string
+	AChild *BStruct
+}
+
+type BStruct struct {
+	BName  string
+	BChild *CStruct
+}
+
+type CStruct struct {
+	CName  string
+	CChild *AStruct
+}
+
+type BadType interface{}
+
+type CycleTest struct {
+	Level  int
+	CycleA AStruct
+	CycleB *BStruct
+	CycleC struct {
+		C CStruct
+	}
+}
+
+var cycleTests = []TestCase{
+	{
+		name:  "cycle-test",
+		value: &CycleTest{},
+		refStrings: []string{
+			`TypeRefs.AStruct:{}`,
+			`TypeRefs.AStruct:{}.AName:string`,
+			`TypeRefs.AStruct:{}.AChild:{}:BStruct`,
+			`TypeRefs.BStruct:{}`,
+			`TypeRefs.BStruct:{}.BName:string`,
+			`TypeRefs.BStruct:{}.BChild:{}:CStruct`,
+			`TypeRefs.CStruct:{}`,
+			`TypeRefs.CStruct:{}.CName:string`,
+			`TypeRefs.CStruct:{}.CChild:{}:AStruct`,
+			`TypeRefs.CycleTest:{}`,
+			`TypeRefs.CycleTest:{}.Level:integer`,
+			`TypeRefs.CycleTest:{}.CycleA:{}:AStruct`,
+			`TypeRefs.CycleTest:{}.CycleB:{}:BStruct`,
+			`TypeRefs.CycleTest:{}.CycleC:{}`,
+			`TypeRefs.CycleTest:{}.CycleC:{}.C:{}:CStruct`,
+			`Root.{}:CycleTest`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.Level:integer`,
+			`Root.{}.CycleA:{}`,
+			`Root.{}.CycleA:{}.AName:string`,
+			`Root.{}.CycleA:{}.AChild:{}`,
+			`Root.{}.CycleA:{}.AChild:{}.BName:string`,
+			`Root.{}.CycleA:{}.AChild:{}.BChild:{}`,
+			`Root.{}.CycleA:{}.AChild:{}.BChild:{}.CName:string`,
+			`Root.{}.CycleA:{}.AChild:{}.BChild:{}.!CChild:{}:AStruct! ERROR:cyclical reference`,
+			`Root.{}.CycleB:{}`,
+			`Root.{}.CycleB:{}.BName:string`,
+			`Root.{}.CycleB:{}.BChild:{}`,
+			`Root.{}.CycleB:{}.BChild:{}.CName:string`,
+			`Root.{}.CycleB:{}.BChild:{}.CChild:{}`,
+			`Root.{}.CycleB:{}.BChild:{}.CChild:{}.AName:string`,
+			`Root.{}.CycleB:{}.BChild:{}.CChild:{}.!AChild:{}:BStruct! ERROR:cyclical reference`,
+			`Root.{}.CycleC:{}`,
+			`Root.{}.CycleC:{}.C:{}`,
+			`Root.{}.CycleC:{}.C:{}.CName:string`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AName:string`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.BName:string`,
+			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.!BChild:{}:CStruct! ERROR:cyclical reference`,
+		},
+	},
 }
 
 var structTests = []TestCase{
@@ -508,38 +808,6 @@ var structTests = []TestCase{
 	{name: "BasicStruct-nil", value: func() interface{} { var g BasicStruct; return g }()},
 	// {name: "CompoundStruct-nil", value: func() interface{} { var g CompoundStruct; return g }()},
 	// {name: "CycleTest-nil", value: func() interface{} { var g CycleTest; return g }()},
-}
-
-var interfaceTests = []TestCase{
-	{name: "interface{}-var", value: func() interface{} { var g interface{}; return g }()},
-	{name: "interface{}-nil", value: nil},
-	{name: "interface{}-bool", value: true},
-	{name: "interface{}-int", value: 123},
-	{name: "interface{}-float", value: 234.345},
-	{name: "interface{}-string", value: "hello"},
-}
-
-var pointerTests = []TestCase{
-	{name: "*bool", value: func() interface{} { var g bool; return &g }()},
-	{name: "*int", value: func() interface{} { var g int; return &g }()},
-	{name: "*float", value: func() interface{} { var g float64; return &g }()},
-	{name: "*string", value: func() interface{} { var g string; return &g }()},
-	{name: "*array", value: func() interface{} { var g [0]string; return &g }()},
-	{name: "*slice", value: func() interface{} { var g []string; return &g }()},
-	{name: "*map", value: func() interface{} { var g map[string]string; return &g }()},
-	{name: "*StringStruct-var", value: func() interface{} { var g *StringStruct; return g }()},
-	{name: "**StringStruct-var", value: func() interface{} { var g *StringStruct; return &g }()},
-}
-
-var jsonTests = []TestCase{
-	{name: "json-null", value: fromJSON([]byte(`null`))},
-	{name: "json-string", value: fromJSON([]byte(`"hello"`))},
-	{name: "json-int", value: fromJSON([]byte(`123`))},
-	{name: "json-float", value: fromJSON([]byte(`234.345`))},
-	{name: "json-bool", value: fromJSON([]byte(`true`))},
-	{name: "json-list", value: fromJSON([]byte(`[123,234,345]`))},
-	{name: "json-list-mixed", value: fromJSON([]byte(`["hello",123,234.345,true]`))},
-	{name: "json-object", value: fromJSON([]byte(`{"key1":"val1","key2":123,"key3":false}`))},
 }
 
 //
@@ -601,17 +869,6 @@ type PrivateStruct struct {
 type BasicStruct struct {
 	BoolVal    bool
 	IntVal     int
-	Int8Val    int8
-	Int16Val   int16
-	Int32Val   int32
-	Int64Val   int64
-	UintVal    uint
-	Uint8Val   uint8
-	Uint16Val  uint16
-	Uint32Val  uint32
-	Uint64Val  uint64
-	UintptrVal uintptr
-	Float32Val float32
 	Float64Val float64
 	StringVal  string
 }
@@ -631,35 +888,6 @@ type CompoundStruct struct {
 	//	Struct
 	StructVal        StringStruct
 	PrivateStructVal PrivateStruct
-}
-
-// Test cyclical relationships:
-// A --> B --> C --> A
-type AStruct struct {
-	AName  string
-	AChild *BStruct
-}
-
-type BStruct struct {
-	BName  string
-	BChild *CStruct
-}
-
-type CStruct struct {
-	CName  string
-	CChild *AStruct
-}
-
-type BadType interface{}
-
-type CycleTest struct {
-	Level  int
-	BadVal BadType
-	CycleA AStruct
-	CycleB *BStruct
-	CycleC struct {
-		C CStruct
-	}
 }
 
 /*
@@ -776,15 +1004,17 @@ func fromJSON(in []byte) interface{} {
 	var out interface{}
 
 	if err := json.Unmarshal(in, &out); err != nil {
-		return fmt.Errorf("ERROR json.Unmarshal: %s", err)
+		err = fmt.Errorf("ERROR json.Unmarshal: %s\n%s", err, string(in))
+		fmt.Println(err)
+		return err
 	}
 
-	// DEBUGXXXXX Print indented JSON string.
-	if out != nil {
-		if b, err := json.MarshalIndent(out, "", "  "); err == nil {
-			fmt.Println(string(b))
-		}
-	}
+	// // DEBUGXXXXX Print indented JSON string.
+	// if out != nil {
+	// 	if b, err := json.MarshalIndent(out, "", "  "); err == nil {
+	// 		fmt.Println(string(b))
+	// 	}
+	// }
 
 	return out
 }
@@ -865,65 +1095,63 @@ func runTests(t *testing.T, testCases []TestCase) {
 	r := NewReflector()
 
 	for _, test := range testCases {
-		t.Run(test.name, func(t *testing.T) {
-			r.Reset()
-			//r.Label = test.name
+		r.Reset()
+		//r.Label = test.name
 
-			gotResult := r.ReflectTypes(test.value)
+		gotResult := r.ReflectTypes(test.value)
 
-			// if b, err := json.MarshalIndent(gotResult, "", "  "); err != nil {
-			// 	t.Errorf("TEST_FAIL %s: json.Marshal err=%s", test.name, err)
-			// } else {
-			// 	fmt.Println(string(b))
-			// }
+		// if b, err := json.MarshalIndent(gotResult, "", "  "); err != nil {
+		// 	t.Errorf("TEST_FAIL %s: json.Marshal err=%s", test.name, err)
+		// } else {
+		// 	fmt.Println(string(b))
+		// }
 
-			opt := NewRenderOptions()
-			for i := 0; i < 2; i++ {
-				opt.DeReference = i == 1
+		opt := NewRenderOptions()
+		for i := 0; i < 2; i++ {
+			opt.DeReference = i == 1
 
-				gotStrings := gotResult.RenderStrings(preRender, postRender, nil, opt)
+			gotStrings := gotResult.RenderStrings(preRender, postRender, nil, opt)
 
-				var wantStrings []string
-				if opt.DeReference {
-					wantStrings = test.derefStrings
-				} else {
-					wantStrings = test.refStrings
-				}
-
-				if !reflect.DeepEqual(gotStrings, wantStrings) {
-					t.Errorf("TEST_FAIL %s: deref=%t", test.name, opt.DeReference)
-
-					maxLen := len(gotStrings)
-					if len(wantStrings) > maxLen {
-						maxLen = len(wantStrings)
-					}
-
-					for i := 0; i < maxLen; i++ {
-						got := ""
-						if i < len(gotStrings) {
-							got = gotStrings[i]
-						}
-
-						want := ""
-						if i < len(wantStrings) {
-							want = wantStrings[i]
-						}
-
-						var flag string
-						if got != want {
-							flag = ">"
-						}
-
-						t.Logf("%05d got =%s", i, got)
-						t.Logf("%5s want=%s", flag, want)
-					}
-
-				} else {
-					t.Logf("TEST_OK %s: deref=%t", test.name, opt.DeReference)
-				}
-
+			var wantStrings []string
+			if opt.DeReference {
+				wantStrings = test.derefStrings
+			} else {
+				wantStrings = test.refStrings
 			}
-		})
+
+			if !reflect.DeepEqual(gotStrings, wantStrings) {
+				t.Errorf("TEST_FAIL %s: deref=%t", test.name, opt.DeReference)
+
+				maxLen := len(gotStrings)
+				if len(wantStrings) > maxLen {
+					maxLen = len(wantStrings)
+				}
+
+				for i := 0; i < maxLen; i++ {
+					got := ""
+					if i < len(gotStrings) {
+						got = gotStrings[i]
+					}
+
+					want := ""
+					if i < len(wantStrings) {
+						want = wantStrings[i]
+					}
+
+					var flag string
+					if got != want {
+						flag = ">"
+					}
+
+					t.Logf("%05d got =%s", i, got)
+					t.Logf("%5s want=%s", flag, want)
+				}
+
+			} else {
+				t.Logf("TEST_OK %s: deref=%t", test.name, opt.DeReference)
+			}
+
+		}
 	}
 }
 

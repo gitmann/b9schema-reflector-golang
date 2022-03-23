@@ -313,6 +313,9 @@ func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer, opt *Rende
 	refPart := ""
 	if !opt.DeReference {
 		refPart = t.NativeDefault().TypeRef
+	} else if opt.DeReference && t.Error == CyclicalReferenceErr {
+		// Keep reference if it's a cyclical error.
+		refPart = t.NativeDefault().TypeRef
 	}
 	if refPart != "" {
 		refPart = ":" + refPart
@@ -936,9 +939,7 @@ func (r *Reflector) reflectTypeImpl(ancestorTypeRef AncestorTypeRef, currentElem
 	// If parent is a root, the current element must be a struct or a Reference.
 	if currentElem.Parent == nil {
 		panic("parent is nil")
-	}
-
-	if currentElem.Parent.Type == generictype.Root.String() {
+	} else if currentElem.Parent.Type == generictype.Root.String() {
 		if genericType != generictype.Struct && genericType.Category() != typecategory.Reference {
 			currentElem.Error = RootKindErr
 			return
@@ -1052,6 +1053,11 @@ func (r *Reflector) addTypeRef(currentElem *TypeElement) {
 		return
 	}
 
+	// Skip if the TypeRef has a cyclical reference error.
+	if currentElem.Error == CyclicalReferenceErr {
+		return
+	}
+
 	refElem := currentElem.Copy()
 
 	// The first element of a type ref does is not a type ref.
@@ -1156,9 +1162,6 @@ func (r *Reflector) reflectTypeListImpl(ancestorTypeRef AncestorTypeRef, current
 			}
 		}
 
-		nextElem := currentElem.NewChild("")
-		r.reflectTypeImpl(ancestorTypeRef.Copy(), nextElem, targetValue, nil)
-
 	case reflect.Slice:
 		currentElem.NativeDefault().Options.AddBool("IsNil", v.IsNil())
 
@@ -1182,7 +1185,7 @@ func (r *Reflector) reflectTypeListImpl(ancestorTypeRef AncestorTypeRef, current
 		childElem := []*TypeElement{}
 
 		for i := 0; i < v.Len(); i++ {
-			nextElem := NewTypeElement("")
+			nextElem := currentElem.NewChild("")
 			childElem = append(childElem, nextElem)
 
 			targetValue = v.Index(i)
@@ -1205,6 +1208,13 @@ func (r *Reflector) reflectTypeListImpl(ancestorTypeRef AncestorTypeRef, current
 
 		// All list elements have same type. Add first element as child of current element.
 		currentElem.AddChild(childElem[0])
+
+		// Remove extra child elements.
+		if len(childElem) > 1 {
+			for i := 1; i < len(childElem); i++ {
+				currentElem.RemoveChild(childElem[i])
+			}
+		}
 	} else {
 		// Iterate using target value.
 		nextElem := currentElem.NewChild("")
