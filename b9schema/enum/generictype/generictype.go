@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/typecategory"
 )
 
 // GenericType defines generic types for shiny schemas.

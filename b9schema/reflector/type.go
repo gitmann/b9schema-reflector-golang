@@ -7,11 +7,11 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/threeflag"
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/typecategory"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/generictype"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/threeflag"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/typecategory"
 
-	"github.com/gitmann/shiny-reflector-golang/b9schema/util"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/util"
 )
 
 // TypeElement holds type information about an element.

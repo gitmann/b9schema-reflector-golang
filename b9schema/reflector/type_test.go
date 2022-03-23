@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gitmann/shiny-reflector-golang/b9schema/enum/generictype"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/generictype"
 )
 
 var allTests = [][]TestCase{
