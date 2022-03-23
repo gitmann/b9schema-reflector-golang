@@ -224,5 +224,5 @@ func PathDefaultOfType(typeString string) string {
 	if p := pathDefaultLookup[typeString]; p != "" {
 		return p
 	}
-	return Invalid.PathDefault()
+	return typeString
 }

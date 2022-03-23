@@ -29,7 +29,7 @@ type TypeElement struct {
 	Nullable bool `json:",omitempty"`
 
 	// Generic type of element.
-	TypeCategory string `json:",omitempty"`
+	TypeCategory string `json:"-"`
 	Type         string `json:",omitempty"`
 
 	// TypeRef holds the name of a type (e.g. struct)
@@ -211,6 +211,36 @@ func (t *TypeElement) Copy() *TypeElement {
 	}
 
 	return n
+}
+
+// GetNativeType returns a new NativeType with Name,Type,TypeRef,Include set.
+func (t *TypeElement) GetNativeType(dialect string) *NativeType {
+	// Start with a new native type that is a clone of the current type element.
+	newType := NewNativeType(dialect)
+	newType.Name = t.Name
+	newType.Type = t.Type
+	newType.TypeRef = t.NativeDefault().TypeRef
+	newType.Include = threeflag.Undefined
+
+	// Check if a native type exists for the dialect.
+	oldType := t.Native[dialect]
+	if oldType != nil {
+		// Replace with values from oldType if set.
+		if oldType.Name != "" {
+			newType.Name = oldType.Name
+		}
+		if oldType.Type != "" {
+			newType.Type = oldType.Type
+		}
+		if oldType.TypeRef != "" {
+			newType.TypeRef = oldType.TypeRef
+		}
+		if oldType.Include != threeflag.Undefined {
+			newType.Include = oldType.Include
+		}
+	}
+
+	return newType
 }
 
 // ParentID returns the ID of the parent of the current element.
@@ -1251,17 +1281,15 @@ func (r *Reflector) reflectTypeStructImpl(ancestorTypeRef AncestorTypeRef, curre
 				nextElem := currentElem.NewChild(structField.Name)
 
 				// Parse struct tags.
-				if s != nil {
-					tags := ParseTags(s.Tag)
-					if len(tags) > 0 {
-						for tagName, tagVal := range tags {
-							tempNative := nextElem.Native[tagName]
-							if tempNative == nil {
-								tempNative = NewNativeType(tagName)
-								nextElem.Native[tagName] = tempNative
-							}
-							tempNative.UpdateFromTag(tagVal)
+				tags := ParseTags(structField.Tag)
+				if len(tags) > 0 {
+					for tagName, tagVal := range tags {
+						tempNative := nextElem.Native[tagName]
+						if tempNative == nil {
+							tempNative = NewNativeType(tagName)
+							nextElem.Native[tagName] = tempNative
 						}
+						tempNative.UpdateFromTag(tagVal)
 					}
 				}
 

@@ -9,16 +9,19 @@ import (
 	"unsafe"
 
 	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/generictype"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/threeflag"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/typecategory"
 )
 
 var allTests = [][]TestCase{
-	// rootJSONTests,
-	// rootGoTests,
-	// typeTests,
-	// listTests,
-	// compoundTests,
-	// referenceTests,
+	rootJSONTests,
+	rootGoTests,
+	typeTests,
+	listTests,
+	compoundTests,
+	referenceTests,
 	cycleTests,
+	jsonTagTests,
 
 	// structTests,
 	// pointerTests,
@@ -31,6 +34,7 @@ type TestCase struct {
 	// Expected strings for reference and de-reference.
 	refStrings   []string
 	derefStrings []string
+	jsonStrings  []string
 }
 
 // *** All reflect types ***
@@ -726,28 +730,28 @@ var referenceTests = []TestCase{
 // Test cyclical relationships:
 // A --> B --> C --> A
 type AStruct struct {
-	AName  string
-	AChild *BStruct
+	AName  string   `json:"aName,omitempty"`
+	AChild *BStruct `json:"aChild"`
 }
 
 type BStruct struct {
-	BName  string
-	BChild *CStruct
+	BName  string   `json:"bName"`
+	BChild *CStruct `json:"bChild"`
 }
 
 type CStruct struct {
-	CName  string
-	CChild *AStruct
+	CName  string   `json:"cName"`
+	CChild *AStruct `json:"cChild"`
 }
 
 type BadType interface{}
 
 type CycleTest struct {
-	Level  int
-	CycleA AStruct
-	CycleB *BStruct
+	Level  int      `json:"-"`
+	CycleA AStruct  `json:"cycleA"`
+	CycleB *BStruct `json:"cycleB"`
 	CycleC struct {
-		C CStruct
+		C CStruct `json:"c"`
 	}
 }
 
@@ -798,6 +802,66 @@ var cycleTests = []TestCase{
 			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}`,
 			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.BName:string`,
 			`Root.{}.CycleC:{}.C:{}.CChild:{}.AChild:{}.!BChild:{}:CStruct! ERROR:cyclical reference`,
+		},
+		jsonStrings: []string{
+			`$.{}`,
+			`$.{}.cycleA:{}`,
+			`$.{}.cycleA:{}.aName:string`,
+			`$.{}.cycleA:{}.aChild:{}`,
+			`$.{}.cycleA:{}.aChild:{}.bName:string`,
+			`$.{}.cycleA:{}.aChild:{}.bChild:{}`,
+			`$.{}.cycleA:{}.aChild:{}.bChild:{}.cName:string`,
+			`$.{}.cycleA:{}.aChild:{}.bChild:{}.!cChild:{}:AStruct! ERROR:cyclical reference`,
+			`$.{}.cycleB:{}`,
+			`$.{}.cycleB:{}.bName:string`,
+			`$.{}.cycleB:{}.bChild:{}`,
+			`$.{}.cycleB:{}.bChild:{}.cName:string`,
+			`$.{}.cycleB:{}.bChild:{}.cChild:{}`,
+			`$.{}.cycleB:{}.bChild:{}.cChild:{}.aName:string`,
+			`$.{}.cycleB:{}.bChild:{}.cChild:{}.!aChild:{}:BStruct! ERROR:cyclical reference`,
+			`$.{}.CycleC:{}`,
+			`$.{}.CycleC:{}.c:{}`,
+			`$.{}.CycleC:{}.c:{}.cName:string`,
+			`$.{}.CycleC:{}.c:{}.cChild:{}`,
+			`$.{}.CycleC:{}.c:{}.cChild:{}.aName:string`,
+			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}`,
+			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}.bName:string`,
+			`$.{}.CycleC:{}.c:{}.cChild:{}.aChild:{}.!bChild:{}:CStruct! ERROR:cyclical reference`,
+		},
+	},
+}
+
+type JSONTagTests struct {
+	NoTag      string
+	ExcludeTag string `json:"-"`
+	RenameOne  string `json:"renameOne"`
+	RenameTwo  string `json:"something"`
+}
+
+var jsonTagTests = []TestCase{
+	{
+		name:  "json-tags",
+		value: JSONTagTests{},
+		refStrings: []string{
+			`TypeRefs.JSONTagTests:{}`,
+			`TypeRefs.JSONTagTests:{}.NoTag:string`,
+			`TypeRefs.JSONTagTests:{}.ExcludeTag:string`,
+			`TypeRefs.JSONTagTests:{}.RenameOne:string`,
+			`TypeRefs.JSONTagTests:{}.RenameTwo:string`,
+			`Root.{}:JSONTagTests`,
+		},
+		derefStrings: []string{
+			`Root.{}`,
+			`Root.{}.NoTag:string`,
+			`Root.{}.ExcludeTag:string`,
+			`Root.{}.RenameOne:string`,
+			`Root.{}.RenameTwo:string`,
+		},
+		jsonStrings: []string{
+			`$.{}`,
+			`$.{}.NoTag:string`,
+			`$.{}.renameOne:string`,
+			`$.{}.something:string`,
 		},
 	},
 }
@@ -1071,6 +1135,75 @@ func makeJSON(x interface{}) interface{} {
 	}
 }
 
+func jsonPathRender(t *TypeElement, opt *RenderOptions) string {
+	// Check root.
+	if t.Type == generictype.Root.String() {
+		// JSON Path root is "$"
+		return "$"
+	}
+
+	jsonType := t.GetNativeType("json")
+	if jsonType.Include == threeflag.False {
+		// Skip this element.
+		return ""
+	}
+
+	namePart := jsonType.Name
+	if namePart != "" {
+		namePart += ":"
+	}
+
+	// Type.
+	var typePart string
+	if t.TypeCategory == typecategory.Invalid.String() {
+		typePart = t.Type
+	} else {
+		typePart = generictype.PathDefaultOfType(jsonType.Type)
+	}
+
+	// Add TypeRef suffix if set but not if de-referencing.
+	// NOTE: json never uses references!
+	refPart := ""
+	if opt.DeReference && t.Error == CyclicalReferenceErr {
+		// Keep reference if it's a cyclical error.
+		refPart = jsonType.TypeRef
+	}
+	if refPart != "" {
+		refPart = ":" + refPart
+	}
+
+	// Build path.
+	path := namePart + typePart + refPart
+
+	// Wrap type in "!" if current element is an error.
+	if t.Error != "" {
+		path = fmt.Sprintf("!%s!", path)
+	}
+
+	return path
+}
+
+// jsonPreRender renders a string using the "json" dialect.
+func jsonPreRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
+	jsonType := t.GetNativeType("json")
+	if jsonType.Include == threeflag.False {
+		// Skip this element.
+		return ""
+	}
+
+	if jsonType.Type == generictype.Root.String() {
+		return ""
+	}
+
+	path := t.RenderPath(pathFunc, opt)
+	out := path.String()
+	if t.Error != "" {
+		out += " ERROR:" + t.Error
+	}
+
+	return out
+}
+
 // preRender renders a string from a TypeElement before Children are processed.
 func preRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
 	if t.Type == generictype.Root.String() {
@@ -1089,6 +1222,40 @@ func preRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) 
 // postRender renders a string from a TypeElement after Children are processed.
 func postRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
 	return ""
+}
+
+func compareStrings(t *testing.T, testName string, gotStrings, wantStrings []string) {
+	if !reflect.DeepEqual(gotStrings, wantStrings) {
+		t.Errorf("TEST_FAIL %s", testName)
+
+		maxLen := len(gotStrings)
+		if len(wantStrings) > maxLen {
+			maxLen = len(wantStrings)
+		}
+
+		for i := 0; i < maxLen; i++ {
+			got := ""
+			if i < len(gotStrings) {
+				got = gotStrings[i]
+			}
+
+			want := ""
+			if i < len(wantStrings) {
+				want = wantStrings[i]
+			}
+
+			var flag string
+			if got != want {
+				flag = ">"
+			}
+
+			t.Logf("%05d got =%s", i, got)
+			t.Logf("%5s want=%s", flag, want)
+		}
+
+	} else {
+		t.Logf("TEST_OK %s", testName)
+	}
 }
 
 func runTests(t *testing.T, testCases []TestCase) {
@@ -1119,38 +1286,18 @@ func runTests(t *testing.T, testCases []TestCase) {
 				wantStrings = test.refStrings
 			}
 
-			if !reflect.DeepEqual(gotStrings, wantStrings) {
-				t.Errorf("TEST_FAIL %s: deref=%t", test.name, opt.DeReference)
+			testName := fmt.Sprintf("%s: deref=%t", test.name, opt.DeReference)
+			compareStrings(t, testName, gotStrings, wantStrings)
+		}
 
-				maxLen := len(gotStrings)
-				if len(wantStrings) > maxLen {
-					maxLen = len(wantStrings)
-				}
+		// Test json dialect.
+		if len(test.jsonStrings) > 0 {
+			opt.DeReference = true
+			gotStrings := gotResult.RenderStrings(jsonPreRender, postRender, jsonPathRender, opt)
+			wantStrings := test.jsonStrings
 
-				for i := 0; i < maxLen; i++ {
-					got := ""
-					if i < len(gotStrings) {
-						got = gotStrings[i]
-					}
-
-					want := ""
-					if i < len(wantStrings) {
-						want = wantStrings[i]
-					}
-
-					var flag string
-					if got != want {
-						flag = ">"
-					}
-
-					t.Logf("%05d got =%s", i, got)
-					t.Logf("%5s want=%s", flag, want)
-				}
-
-			} else {
-				t.Logf("TEST_OK %s: deref=%t", test.name, opt.DeReference)
-			}
-
+			testName := fmt.Sprintf("%s: dialect=json", test.name)
+			compareStrings(t, testName, gotStrings, wantStrings)
 		}
 	}
 }
