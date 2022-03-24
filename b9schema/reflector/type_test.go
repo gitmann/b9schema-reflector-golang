@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
@@ -316,6 +317,16 @@ var typeTests = []TestCase{
 			`Root.{}`,
 			`Root.{}.Bool:boolean`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  BoolTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      Bool:`,
+			`        type: boolean`,
+			`root:`,
+			`  $ref: '#/definitions/BoolTypes'`,
+		},
 	},
 	{
 		name:  "integer",
@@ -349,6 +360,38 @@ var typeTests = []TestCase{
 			`Root.{}.Uint8:integer`,
 			`Root.{}.Uintptr:integer`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  IntegerTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      Int:`,
+			`        type: integer`,
+			`      Int16:`,
+			`        type: integer`,
+			`      Int32:`,
+			`        type: integer`,
+			`      Int64:`,
+			`        type: integer`,
+			`        format: int64`,
+			`      Int8:`,
+			`        type: integer`,
+			`      Uint:`,
+			`        type: integer`,
+			`      Uint16:`,
+			`        type: integer`,
+			`      Uint32:`,
+			`        type: integer`,
+			`      Uint64:`,
+			`        type: integer`,
+			`        format: int64`,
+			`      Uint8:`,
+			`        type: integer`,
+			`      Uintptr:`,
+			`        type: integer`,
+			`root:`,
+			`  $ref: '#/definitions/IntegerTypes'`,
+		},
 	},
 	{
 		name:  `float`,
@@ -364,6 +407,19 @@ var typeTests = []TestCase{
 			`Root.{}.Float32:float`,
 			`Root.{}.Float64:float`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  FloatTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      Float32:`,
+			`        type: number`,
+			`      Float64:`,
+			`        type: number`,
+			`        format: double`,
+			`root:`,
+			`  $ref: '#/definitions/FloatTypes'`,
+		},
 	},
 	{
 		name:  "string",
@@ -376,6 +432,16 @@ var typeTests = []TestCase{
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.String:string`,
+		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  StringTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      String:`,
+			`        type: string`,
+			`root:`,
+			`  $ref: '#/definitions/StringTypes'`,
 		},
 	},
 	{
@@ -397,6 +463,29 @@ var typeTests = []TestCase{
 			`Root.{}.!Complex64:invalid:complex64! ERROR:kind not supported`,
 			`Root.{}.!Func:invalid:func! ERROR:kind not supported`,
 			`Root.{}."!UnsafePointer:invalid:unsafe.Pointer!" ERROR:kind not supported`,
+		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  InvalidTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      Chan:`,
+			`        type: invalid:chan`,
+			`        error: kind not supported`,
+			`      Complex128:`,
+			`        type: invalid:complex128`,
+			`        error: kind not supported`,
+			`      Complex64:`,
+			`        type: invalid:complex64`,
+			`        error: kind not supported`,
+			`      Func:`,
+			`        type: invalid:func`,
+			`        error: kind not supported`,
+			`      UnsafePointer:`,
+			`        type: invalid:unsafe.Pointer`,
+			`        error: kind not supported`,
+			`root:`,
+			`  $ref: '#/definitions/InvalidTypes'`,
 		},
 	},
 	{
@@ -435,6 +524,51 @@ var typeTests = []TestCase{
 			`Root.{}.Slice:[].!invalid! ERROR:interface element is nil`,
 			`Root.{}.!Struct:{}! ERROR:empty struct not supported`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  CompoundTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      Array0:`,
+			`        type: array`,
+			`        items:`,
+			`          type: string`,
+			`      Array3:`,
+			`        type: array`,
+			`        items:`,
+			`          type: string`,
+			`      Interface:`,
+			`        type: invalid`,
+			`        error: interface element is nil`,
+			`      Map:`,
+			`        type: object`,
+			`        properties:`,
+			`          error: map key type must be string`,
+			`      PrivatePtr:`,
+			`        $ref: '#/definitions/PrivateStruct'`,
+			`      Ptr:`,
+			`        $ref: '#/definitions/StringStruct'`,
+			`      Slice:`,
+			`        type: array`,
+			`        items:`,
+			`          type: invalid`,
+			`          error: interface element is nil`,
+			`      Struct:`,
+			`        type: object`,
+			`        properties:`,
+			`          error: empty struct not supported`,
+			`  PrivateStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      error: struct has no exported fields`,
+			`  StringStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      Value:`,
+			`        type: string`,
+			`root:`,
+			`  $ref: '#/definitions/CompoundTypes'`,
+		},
 	},
 	{
 		name:  "special",
@@ -447,6 +581,17 @@ var typeTests = []TestCase{
 		derefStrings: []string{
 			`Root.{}`,
 			`Root.{}.DateTime:datetime`,
+		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  SpecialTypes:`,
+			`    type: object`,
+			`    properties:`,
+			`      DateTime:`,
+			`        type: string`,
+			`        format: date-time`,
+			`root:`,
+			`  $ref: '#/definitions/SpecialTypes'`,
 		},
 	},
 }
@@ -499,6 +644,28 @@ var listTests = []TestCase{
 			`Root.{}.Array3:[]`,
 			`Root.{}.Array3:[].string`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  ArrayStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      Array0:`,
+			`        type: array`,
+			`        items:`,
+			`          type: string`,
+			`      Array2_3:`,
+			`        type: array`,
+			`        items:`,
+			`          type: array`,
+			`          items:`,
+			`            type: string`,
+			`      Array3:`,
+			`        type: array`,
+			`        items:`,
+			`          type: string`,
+			`root:`,
+			`  $ref: '#/definitions/ArrayStruct'`,
+		},
 	},
 	{
 		name:  "json-array",
@@ -523,6 +690,27 @@ var listTests = []TestCase{
 			`Root.{}.Array3:[]`,
 			`Root.{}.Array3:[].string`,
 		},
+		openapiStrings: []string{
+			`root:`,
+			`  type: object`,
+			`  properties:`,
+			`    Array0:`,
+			`      type: array`,
+			`      items:`,
+			`        type: invalid`,
+			`        error: interface element is nil`,
+			`    Array2_3:`,
+			`      type: array`,
+			`      items:`,
+			`        type: array`,
+			`        items:`,
+			`          type: number`,
+			`          format: double`,
+			`    Array3:`,
+			`      type: array`,
+			`      items:`,
+			`        type: string`,
+		},
 	},
 	{
 		name:  "slices",
@@ -543,6 +731,24 @@ var listTests = []TestCase{
 			`Root.{}.Array2:[].[].string`,
 			`Root.{}.Slice:[]`,
 			`Root.{}.Slice:[].string`,
+		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  SliceStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      Array2:`,
+			`        type: array`,
+			`        items:`,
+			`          type: array`,
+			`          items:`,
+			`            type: string`,
+			`      Slice:`,
+			`        type: array`,
+			`        items:`,
+			`          type: string`,
+			`root:`,
+			`  $ref: '#/definitions/SliceStruct'`,
 		},
 	},
 }
@@ -618,6 +824,44 @@ var compoundTests = []TestCase{
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
 			`Root.{}.MapOK:{}.StringVal:string`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  MapTestsStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      MapOK:`,
+			`        type: object`,
+			`        properties:`,
+			`          BoolVal:`,
+			`            type: boolean`,
+			`          FloatVal:`,
+			`            type: number`,
+			`          IntVal:`,
+			`            type: number`,
+			`            format: double`,
+			`          ListVal:`,
+			`            type: array`,
+			`            items:`,
+			`              type: number`,
+			`              format: double`,
+			`          MapVal:`,
+			`            type: object`,
+			`            properties:`,
+			`              Key1:`,
+			`                type: string`,
+			`              Key2:`,
+			`                type: object`,
+			`                properties:`,
+			`                  DeepKey1:`,
+			`                    type: string`,
+			`                  DeepKey2:`,
+			`                    type: number`,
+			`                    format: double`,
+			`          StringVal:`,
+			`            type: string`,
+			`root:`,
+			`  $ref: '#/definitions/MapTestsStruct'`,
+		},
 	},
 	{
 		name:  "json-map",
@@ -651,6 +895,42 @@ var compoundTests = []TestCase{
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey1:string`,
 			`Root.{}.MapOK:{}.MapVal:{}.Key2:{}.DeepKey2:float`,
 			`Root.{}.MapOK:{}.StringVal:string`,
+		},
+		openapiStrings: []string{
+			`root:`,
+			`  type: object`,
+			`  properties:`,
+			`    MapOK:`,
+			`      type: object`,
+			`      properties:`,
+			`        BoolVal:`,
+			`          type: boolean`,
+			`        FloatVal:`,
+			`          type: number`,
+			`          format: double`,
+			`        IntVal:`,
+			`          type: number`,
+			`          format: double`,
+			`        ListVal:`,
+			`          type: array`,
+			`          items:`,
+			`            type: number`,
+			`            format: double`,
+			`        MapVal:`,
+			`          type: object`,
+			`          properties:`,
+			`            Key1:`,
+			`              type: string`,
+			`            Key2:`,
+			`              type: object`,
+			`              properties:`,
+			`                DeepKey1:`,
+			`                  type: string`,
+			`                DeepKey2:`,
+			`                  type: number`,
+			`                  format: double`,
+			`        StringVal:`,
+			`          type: string`,
 		},
 	},
 }
@@ -724,6 +1004,32 @@ var referenceTests = []TestCase{
 			`Root.{}.PtrVal:{}.Float64Val:float`,
 			`Root.{}.PtrVal:{}.IntVal:integer`,
 			`Root.{}.PtrVal:{}.StringVal:string`,
+		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  BasicStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      BoolVal:`,
+			`        type: boolean`,
+			`      Float64Val:`,
+			`        type: number`,
+			`        format: double`,
+			`      IntVal:`,
+			`        type: integer`,
+			`      StringVal:`,
+			`        type: string`,
+			`  ReferenceTestsStruct:`,
+			`    type: object`,
+			`    properties:`,
+			`      InterfaceVal:`,
+			`        $ref: '#/definitions/BasicStruct'`,
+			`      PtrPtrVal:`,
+			`        $ref: '#/definitions/BasicStruct'`,
+			`      PtrVal:`,
+			`        $ref: '#/definitions/BasicStruct'`,
+			`root:`,
+			`  $ref: '#/definitions/ReferenceTestsStruct'`,
 		},
 	},
 }
@@ -821,6 +1127,44 @@ var cycleTests = []TestCase{
 			`definitions.CycleTest:{}.CycleC:{}.c:{}:CStruct`,
 			`$.{}:CycleTest`,
 		},
+		openapiStrings: []string{
+			`definitions:`,
+			`  cycleA:`,
+			`    type: object`,
+			`    properties:`,
+			`      aChild:`,
+			`        $ref: '#/definitions/BStruct'`,
+			`      aName:`,
+			`        type: string`,
+			`  aChild:`,
+			`    type: object`,
+			`    properties:`,
+			`      bChild:`,
+			`        $ref: '#/definitions/CStruct'`,
+			`      bName:`,
+			`        type: string`,
+			`  bChild:`,
+			`    type: object`,
+			`    properties:`,
+			`      cChild:`,
+			`        $ref: '#/definitions/AStruct'`,
+			`      cName:`,
+			`        type: string`,
+			`  CycleTest:`,
+			`    type: object`,
+			`    properties:`,
+			`      cycleA:`,
+			`        $ref: '#/definitions/AStruct'`,
+			`      cycleB:`,
+			`        $ref: '#/definitions/BStruct'`,
+			`      CycleC:`,
+			`        type: object`,
+			`        properties:`,
+			`          c:`,
+			`            $ref: '#/definitions/CStruct'`,
+			`root:`,
+			`  $ref: '#/definitions/CycleTest'`,
+		},
 	},
 }
 
@@ -858,7 +1202,18 @@ var jsonTagTests = []TestCase{
 			`$.{}:JSONTagTests`,
 		},
 		openapiStrings: []string{
-			`definitions.JSONTagTests:{}`,
+			`definitions:`,
+			`  JSONTagTests:`,
+			`    type: object`,
+			`    properties:`,
+			`      NoTag:`,
+			`        type: string`,
+			`      renameOne:`,
+			`        type: string`,
+			`      something:`,
+			`        type: string`,
+			`root:`,
+			`  $ref: '#/definitions/JSONTagTests'`,
 		},
 	},
 }
@@ -1224,40 +1579,167 @@ func preRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) 
 	return out
 }
 
-// postRender renders a string from a TypeElement after Children are processed.
-func postRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
-	return ""
+// openapiPreRender renders a string for an OpenAPI spec as YAML.
+func openapiPreRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
+	jsonType := t.GetNativeType("json")
+	if jsonType.Include == threeflag.False {
+		// Skip this element.
+		return ""
+	}
+
+	// Special handling for root elements.
+	if t.Type == generictype.Root.String() {
+		opt.Indent += 1
+		if t.Name == "Root" {
+			// Build an object named "root".
+			return `root:`
+		} else if t.Name == "TypeRefs" {
+			// Store TypeRefs under the "definitions" key.
+			return `definitions:`
+		}
+	}
+
+	// Utility function to build prefix from indent.
+	prefix := func() string {
+		return strings.Repeat(" ", opt.Indent*2)
+	}
+
+	nativeType := t.NativeDefault()
+
+	outLines := []string{}
+
+	if jsonType.Name != "" {
+		outLines = append(outLines, fmt.Sprintf("%s%s:", prefix(), jsonType.Name))
+		opt.Indent += 1
+	}
+
+	if jsonType.TypeRef != "" {
+		outLines = append(outLines, fmt.Sprintf(`%s$ref: '#/definitions/%s'`, prefix(), jsonType.TypeRef))
+	} else {
+		switch t.Type {
+		case generictype.Struct.String():
+			outLines = append(outLines,
+				prefix()+"type: object",
+				prefix()+"properties:",
+			)
+			opt.Indent += 1
+		case generictype.List.String():
+			outLines = append(outLines,
+				prefix()+"type: array",
+				prefix()+"items:",
+			)
+			opt.Indent += 1
+		case generictype.Boolean.String():
+			outLines = append(outLines,
+				prefix()+"type: boolean",
+			)
+		case generictype.Integer.String():
+			outLines = append(outLines,
+				prefix()+"type: integer",
+			)
+			if nativeType.Type == "int64" || nativeType.Type == "uint64" {
+				outLines = append(outLines,
+					prefix()+"format: int64",
+				)
+			}
+		case generictype.Float.String():
+			outLines = append(outLines,
+				prefix()+"type: number",
+			)
+			if nativeType.Type == "float64" {
+				outLines = append(outLines,
+					prefix()+"format: double",
+				)
+			}
+		case generictype.String.String():
+			outLines = append(outLines,
+				prefix()+"type: string",
+			)
+		case generictype.DateTime.String():
+			outLines = append(outLines,
+				prefix()+"type: string",
+				prefix()+"format: date-time",
+			)
+		default:
+			outLines = append(outLines,
+				prefix()+"type: "+t.Type,
+			)
+		}
+	}
+
+	if t.Error != "" {
+		outLines = append(outLines,
+			prefix()+"error: "+t.Error,
+		)
+	}
+
+	return strings.Join(outLines, "\n")
 }
 
 func compareStrings(t *testing.T, testName string, gotStrings, wantStrings []string) {
-	if !reflect.DeepEqual(gotStrings, wantStrings) {
+	// Split strings into lines.
+	gotLines := []string{}
+	for _, line := range gotStrings {
+		lines := strings.Split(line, "\n")
+		gotLines = append(gotLines, lines...)
+	}
+	wantLines := []string{}
+	for _, line := range wantStrings {
+		lines := strings.Split(line, "\n")
+		wantLines = append(wantLines, lines...)
+	}
+
+	if !reflect.DeepEqual(gotLines, wantLines) {
 		t.Errorf("TEST_FAIL %s", testName)
 
-		maxLen := len(gotStrings)
-		if len(wantStrings) > maxLen {
-			maxLen = len(wantStrings)
+		maxLen := len(gotLines)
+		if len(wantLines) > maxLen {
+			maxLen = len(wantLines)
 		}
 
+		type diffStruct struct {
+			got, want string
+		}
+		diff := []*diffStruct{}
+
 		for i := 0; i < maxLen; i++ {
-			got := ""
-			if i < len(gotStrings) {
-				got = gotStrings[i]
+			newDiff := &diffStruct{}
+
+			if i < len(gotLines) {
+				newDiff.got = gotLines[i]
 			}
 
-			want := ""
-			if i < len(wantStrings) {
-				want = wantStrings[i]
+			if i < len(wantLines) {
+				newDiff.want = wantLines[i]
 			}
 
-			var flag string
-			if got != want {
+			diff = append(diff, newDiff)
+		}
+
+		// Dump got and want lines.
+		outLines := []string{}
+
+		outLines = append(outLines, "***** GOT:")
+		for i, newDiff := range diff {
+			flag := " "
+			if newDiff.got != newDiff.want {
 				flag = ">"
 			}
 
-			t.Logf("%05d got =%s", i, got)
-			t.Logf("%5s want=%s", flag, want)
+			outLines = append(outLines, fmt.Sprintf("%05d%s| %s", i, flag, newDiff.got))
 		}
 
+		outLines = append(outLines, "***** WANT:")
+		for i, newDiff := range diff {
+			flag := " "
+			if newDiff.got != newDiff.want {
+				flag = ">"
+			}
+
+			outLines = append(outLines, fmt.Sprintf("%05d%s| %s", i, flag, newDiff.want))
+		}
+
+		t.Errorf("TEST_FAIL %s\n%s", testName, strings.Join(outLines, "\n"))
 	} else {
 		t.Logf("TEST_OK %s", testName)
 	}
@@ -1282,7 +1764,7 @@ func runTests(t *testing.T, testCases []TestCase) {
 		for i := 0; i < 2; i++ {
 			opt.DeReference = i == 1
 
-			gotStrings := gotResult.RenderStrings(preRender, postRender, nil, opt)
+			gotStrings := gotResult.RenderStrings(preRender, nil, nil, opt)
 
 			var wantStrings []string
 			if opt.DeReference {
@@ -1298,10 +1780,22 @@ func runTests(t *testing.T, testCases []TestCase) {
 		// Test json dialect.
 		if len(test.jsonStrings) > 0 {
 			opt.DeReference = false
-			gotStrings := gotResult.RenderStrings(jsonPreRender, postRender, jsonPathRender, opt)
+			gotStrings := gotResult.RenderStrings(jsonPreRender, nil, jsonPathRender, opt)
 			wantStrings := test.jsonStrings
 
 			testName := fmt.Sprintf("%s: dialect=json", test.name)
+			compareStrings(t, testName, gotStrings, wantStrings)
+		}
+
+		// Test OpenAPI schema.
+		if len(test.openapiStrings) > 0 {
+			opt.DeReference = false
+			opt.Indent = 0
+
+			gotStrings := gotResult.RenderStrings(openapiPreRender, nil, nil, opt)
+			wantStrings := test.openapiStrings
+
+			testName := fmt.Sprintf("%s: dialect=openapi", test.name)
 			compareStrings(t, testName, gotStrings, wantStrings)
 		}
 	}

@@ -317,9 +317,9 @@ type PathStringRenderer func(t *TypeElement, opt *RenderOptions) string
 // - If Name is set, prefix with "Name", otherwise "-"
 // - If TypeRef is set, suffix with "TypeRef", otherwise "-"
 // - If Error is set, wrap entire string with "!"
-func (t *TypeElement) RenderPathString(renderFunc PathStringRenderer, opt *RenderOptions) string {
-	if renderFunc != nil {
-		return renderFunc(t, opt)
+func (t *TypeElement) RenderPathString(pathFunc PathStringRenderer, opt *RenderOptions) string {
+	if pathFunc != nil {
+		return pathFunc(t, opt)
 	}
 
 	if t.Type == generictype.Root.String() {
@@ -382,6 +382,9 @@ func (t *TypeElement) IsExported() bool {
 }
 
 func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pathFunc PathStringRenderer, opt *RenderOptions) []string {
+	// Capture initial indent and restore on exit.
+	originalIndent := opt.Indent
+
 	out := []string{}
 
 	// Process element with preFunc.
@@ -399,7 +402,13 @@ func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pat
 		typeRefMap := t.ChildMap()
 		typeRefKeys := t.ChildKeys(typeRefMap)
 
+		// Capture indent before children.
+		childIndent := opt.Indent
+
 		for _, childName := range typeRefKeys {
+			// Reset indent before each child.
+			opt.Indent = childIndent
+
 			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc, opt)
 			for _, r := range rendered {
 				if r != "" {
@@ -409,12 +418,18 @@ func (t *TypeElement) RenderStrings(preFunc, postFunc ElementStringRenderer, pat
 		}
 	}
 
+	// Restore original indent.
+	opt.Indent = originalIndent
+
 	// Process element with postFunc.
 	if postFunc != nil {
 		if s := postFunc(t, pathFunc, opt); s != "" {
 			out = append(out, s)
 		}
 	}
+
+	// Restore original indent.
+	opt.Indent = originalIndent
 
 	return out
 }
@@ -901,11 +916,8 @@ func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRende
 
 	// Print type refs.
 	if !opt.DeReference {
-		typeRefMap := typeResult.TypeRefs.ChildMap()
-		typeRefKeys := typeResult.TypeRefs.ChildKeys(typeRefMap)
-
-		for _, childName := range typeRefKeys {
-			rendered := typeRefMap[childName].RenderStrings(preFunc, postFunc, pathFunc, opt)
+		if len(typeResult.TypeRefs.Children) > 0 {
+			rendered := typeResult.TypeRefs.RenderStrings(preFunc, postFunc, pathFunc, opt)
 			for _, r := range rendered {
 				if r != "" {
 					out = append(out, r)
@@ -915,10 +927,12 @@ func (typeResult *TypeResult) RenderStrings(preFunc, postFunc ElementStringRende
 	}
 
 	//	Print types.
-	rendered := typeResult.Root.RenderStrings(preFunc, postFunc, pathFunc, opt)
-	for _, r := range rendered {
-		if r != "" {
-			out = append(out, r)
+	if len(typeResult.Root.Children) > 0 {
+		rendered := typeResult.Root.RenderStrings(preFunc, postFunc, pathFunc, opt)
+		for _, r := range rendered {
+			if r != "" {
+				out = append(out, r)
+			}
 		}
 	}
 

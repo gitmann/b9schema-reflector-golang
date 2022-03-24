@@ -29,6 +29,9 @@ type RenderOptions struct {
 	// - Any lowercase element names are converted to 1st character uppercase so that they are exported.
 	//   - Original lowercase name is saved as the native "json" GetName.
 	ParseAsJSON bool
+
+	// Indent is used for rendering where indent matters.
+	Indent int
 }
 
 func NewRenderOptions() *RenderOptions {
