@@ -10,23 +10,36 @@ import (
 
 // OpenAPIRenderer provides a simple string renderer.
 type OpenAPIRenderer struct {
+	// Path
+	URLPath string
+
 	opt *Options
 }
 
-func NewOpenAPIRenderer(opt *Options) *OpenAPIRenderer {
+func NewOpenAPIRenderer(urlPath string, opt *Options) *OpenAPIRenderer {
 	if opt == nil {
 		opt = NewOptions()
 	}
 
 	opt.Prefix = "  "
 
-	return &OpenAPIRenderer{opt: opt}
+	return &OpenAPIRenderer{
+		URLPath: urlPath,
+		opt:     opt,
+	}
 }
 
 func (r *OpenAPIRenderer) ProcessResult(result *types.Schema) ([]string, error) {
+	out := []string{}
+
 	// Header
-	return RenderSchema(result, r), nil
+	out = append(out, `openapi: 3.0.0`)
+
+	out = appendStrings(out, RenderSchema(result, r))
+
 	// Footer
+
+	return out, nil
 }
 
 func (r *OpenAPIRenderer) DeReference() bool {
@@ -60,11 +73,40 @@ func (r *OpenAPIRenderer) Pre(t *types.TypeElement) []string {
 		r.SetIndent(r.Indent() + 1)
 
 		if t.Name == "Root" {
-			// Build an object named "root".
-			return []string{`root:`}
+			// Build an API path.
+			out := []string{`paths:`}
+
+			out = append(out, r.Prefix()+r.URLPath)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`get:`)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`summary: Return data.`)
+			out = append(out, r.Prefix()+`responses:`)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`'200':`)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`description: Success`)
+			out = append(out, r.Prefix()+`content:`)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`application/json:`)
+
+			r.SetIndent(r.Indent() + 1)
+			out = append(out, r.Prefix()+`schema:`)
+
+			r.SetIndent(r.Indent() + 1)
+			return out
 		} else if t.Name == "TypeRefs" {
-			// Store TypeRefs under the "definitions" key.
-			return []string{`definitions:`}
+			// Store TypeRefs under the "components/schemas" key.
+			r.SetIndent(r.Indent() + 1)
+			return []string{
+				`components:`,
+				`  schemas:`,
+			}
 		}
 	}
 
