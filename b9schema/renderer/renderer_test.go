@@ -1,17 +1,14 @@
-package reflector
+package renderer
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gitmann/b9schema-reflector-golang/b9schema/reflector"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
-
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/generictype"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/threeflag"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/enum/typecategory"
 )
 
 var allTests = [][]TestCase{
@@ -1487,195 +1484,6 @@ func makeJSON(x interface{}) interface{} {
 	}
 }
 
-func jsonPathRender(t *TypeElement, opt *RenderOptions) string {
-	// Check root.
-	if t.Type == generictype.Root.String() {
-		switch t.Name {
-		case "Root":
-			// JSON Path root is "$"
-			return "$"
-		case "TypeRefs":
-			return "definitions"
-		default:
-			return t.Name
-		}
-	}
-
-	jsonType := t.GetNativeType("json")
-	if jsonType.Include == threeflag.False {
-		// Skip this element.
-		return ""
-	}
-
-	namePart := jsonType.Name
-	if namePart != "" {
-		namePart += ":"
-	}
-
-	// Type.
-	var typePart string
-	if t.TypeCategory == typecategory.Invalid.String() {
-		typePart = t.Type
-	} else {
-		typePart = generictype.PathDefaultOfType(jsonType.Type)
-	}
-
-	// Add TypeRef suffix if set but not if de-referencing.
-	refPart := ""
-	if !opt.DeReference {
-		refPart = jsonType.TypeRef
-	} else if opt.DeReference && t.Error == CyclicalReferenceErr {
-		// Keep reference if it's a cyclical error.
-		refPart = jsonType.TypeRef
-	}
-	if refPart != "" {
-		refPart = ":" + refPart
-	}
-
-	// Build path.
-	path := namePart + typePart + refPart
-
-	// Wrap type in "!" if current element is an error.
-	if t.Error != "" {
-		path = fmt.Sprintf("!%s!", path)
-	}
-
-	return path
-}
-
-// jsonPreRender renders a string using the "json" dialect.
-func jsonPreRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
-	jsonType := t.GetNativeType("json")
-	if jsonType.Include == threeflag.False {
-		// Skip this element.
-		return ""
-	}
-
-	if jsonType.Type == generictype.Root.String() {
-		return ""
-	}
-
-	path := t.RenderPath(pathFunc, opt)
-	out := path.String()
-	if t.Error != "" {
-		out += " ERROR:" + t.Error
-	}
-
-	return out
-}
-
-// preRender renders a string from a TypeElement before Children are processed.
-func preRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
-	if t.Type == generictype.Root.String() {
-		return ""
-	}
-
-	path := t.RenderPath(pathFunc, opt)
-	out := path.String()
-	if t.Error != "" {
-		out += " ERROR:" + t.Error
-	}
-
-	return out
-}
-
-// openapiPreRender renders a string for an OpenAPI spec as YAML.
-func openapiPreRender(t *TypeElement, pathFunc PathStringRenderer, opt *RenderOptions) string {
-	jsonType := t.GetNativeType("json")
-	if jsonType.Include == threeflag.False {
-		// Skip this element.
-		return ""
-	}
-
-	// Special handling for root elements.
-	if t.Type == generictype.Root.String() {
-		opt.Indent += 1
-		if t.Name == "Root" {
-			// Build an object named "root".
-			return `root:`
-		} else if t.Name == "TypeRefs" {
-			// Store TypeRefs under the "definitions" key.
-			return `definitions:`
-		}
-	}
-
-	// Utility function to build prefix from indent.
-	prefix := func() string {
-		return strings.Repeat(" ", opt.Indent*2)
-	}
-
-	nativeType := t.NativeDefault()
-
-	outLines := []string{}
-
-	if jsonType.Name != "" {
-		outLines = append(outLines, fmt.Sprintf("%s%s:", prefix(), jsonType.Name))
-		opt.Indent += 1
-	}
-
-	if jsonType.TypeRef != "" {
-		outLines = append(outLines, fmt.Sprintf(`%s$ref: '#/definitions/%s'`, prefix(), jsonType.TypeRef))
-	} else {
-		switch t.Type {
-		case generictype.Struct.String():
-			outLines = append(outLines,
-				prefix()+"type: object",
-				prefix()+"properties:",
-			)
-			opt.Indent += 1
-		case generictype.List.String():
-			outLines = append(outLines,
-				prefix()+"type: array",
-				prefix()+"items:",
-			)
-			opt.Indent += 1
-		case generictype.Boolean.String():
-			outLines = append(outLines,
-				prefix()+"type: boolean",
-			)
-		case generictype.Integer.String():
-			outLines = append(outLines,
-				prefix()+"type: integer",
-			)
-			if nativeType.Type == "int64" || nativeType.Type == "uint64" {
-				outLines = append(outLines,
-					prefix()+"format: int64",
-				)
-			}
-		case generictype.Float.String():
-			outLines = append(outLines,
-				prefix()+"type: number",
-			)
-			if nativeType.Type == "float64" {
-				outLines = append(outLines,
-					prefix()+"format: double",
-				)
-			}
-		case generictype.String.String():
-			outLines = append(outLines,
-				prefix()+"type: string",
-			)
-		case generictype.DateTime.String():
-			outLines = append(outLines,
-				prefix()+"type: string",
-				prefix()+"format: date-time",
-			)
-		default:
-			outLines = append(outLines,
-				prefix()+"type: "+t.Type,
-			)
-		}
-	}
-
-	if t.Error != "" {
-		outLines = append(outLines,
-			prefix()+"error: "+t.Error,
-		)
-	}
-
-	return strings.Join(outLines, "\n")
-}
-
 func compareStrings(t *testing.T, testName string, gotStrings, wantStrings []string) {
 	// Split strings into lines.
 	gotLines := []string{}
@@ -1746,13 +1554,13 @@ func compareStrings(t *testing.T, testName string, gotStrings, wantStrings []str
 }
 
 func runTests(t *testing.T, testCases []TestCase) {
-	r := NewReflector()
+	r := reflector.NewReflector()
 
 	for _, test := range testCases {
 		r.Reset()
 		//r.Label = test.name
 
-		gotResult := r.ReflectTypes(test.value)
+		gotResult := r.DeriveSchema(test.value)
 
 		// if b, err := json.MarshalIndent(gotResult, "", "  "); err != nil {
 		// 	t.Errorf("TEST_FAIL %s: json.Marshal err=%s", test.name, err)
@@ -1760,11 +1568,12 @@ func runTests(t *testing.T, testCases []TestCase) {
 		// 	fmt.Println(string(b))
 		// }
 
-		opt := NewRenderOptions()
 		for i := 0; i < 2; i++ {
+			opt := NewOptions()
 			opt.DeReference = i == 1
 
-			gotStrings := gotResult.RenderStrings(preRender, nil, nil, opt)
+			r := NewSimpleRenderer(opt)
+			gotStrings, _ := r.ProcessResult(gotResult)
 
 			var wantStrings []string
 			if opt.DeReference {
@@ -1779,8 +1588,11 @@ func runTests(t *testing.T, testCases []TestCase) {
 
 		// Test json dialect.
 		if len(test.jsonStrings) > 0 {
+			opt := NewOptions()
 			opt.DeReference = false
-			gotStrings := gotResult.RenderStrings(jsonPreRender, nil, jsonPathRender, opt)
+
+			r := NewJSONRenderer(opt)
+			gotStrings, _ := r.ProcessResult(gotResult)
 			wantStrings := test.jsonStrings
 
 			testName := fmt.Sprintf("%s: dialect=json", test.name)
@@ -1789,10 +1601,12 @@ func runTests(t *testing.T, testCases []TestCase) {
 
 		// Test OpenAPI schema.
 		if len(test.openapiStrings) > 0 {
+			opt := NewOptions()
 			opt.DeReference = false
 			opt.Indent = 0
 
-			gotStrings := gotResult.RenderStrings(openapiPreRender, nil, nil, opt)
+			r := NewOpenAPIRenderer(opt)
+			gotStrings, _ := r.ProcessResult(gotResult)
 			wantStrings := test.openapiStrings
 
 			testName := fmt.Sprintf("%s: dialect=openapi", test.name)
