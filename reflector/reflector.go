@@ -2,12 +2,12 @@ package reflector
 
 import (
 	"fmt"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/enum/generictype"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/enum/threeflag"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/enum/typecategory"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/idgen"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/types"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/util"
+	"github.com/gitmann/b9schema-reflector-golang/lib/enum/generictype"
+	"github.com/gitmann/b9schema-reflector-golang/lib/enum/threeflag"
+	"github.com/gitmann/b9schema-reflector-golang/lib/enum/typecategory"
+	"github.com/gitmann/b9schema-reflector-golang/lib/idgen"
+	"github.com/gitmann/b9schema-reflector-golang/lib/types"
+	"github.com/gitmann/b9schema-reflector-golang/lib/util"
 	"reflect"
 	"sort"
 	"strings"

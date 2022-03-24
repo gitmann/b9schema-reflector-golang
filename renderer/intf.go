@@ -1,7 +1,7 @@
 package renderer
 
 import (
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/types"
+	"github.com/gitmann/b9schema-reflector-golang/lib/types"
 )
 
 type Renderer interface {

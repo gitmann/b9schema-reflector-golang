@@ -1,7 +1,7 @@
 package renderer
 
 import (
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/types"
+	"github.com/gitmann/b9schema-reflector-golang/lib/types"
 )
 
 // RenderStrings builds a string representation of a type result using the given pre, path, and post functions.

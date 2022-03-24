@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/reflector"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/renderer"
+	"github.com/gitmann/b9schema-reflector-golang/reflector"
+	"github.com/gitmann/b9schema-reflector-golang/renderer"
 	"strings"
 )
 

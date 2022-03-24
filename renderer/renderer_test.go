@@ -3,7 +3,7 @@ package renderer
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/reflector"
+	"github.com/gitmann/b9schema-reflector-golang/reflector"
 	"reflect"
 	"strings"
 	"testing"

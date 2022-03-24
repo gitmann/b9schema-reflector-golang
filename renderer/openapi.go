@@ -2,9 +2,9 @@ package renderer
 
 import (
 	"fmt"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/enum/generictype"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/enum/threeflag"
-	"github.com/gitmann/b9schema-reflector-golang/b9schema/lib/types"
+	"github.com/gitmann/b9schema-reflector-golang/lib/enum/generictype"
+	"github.com/gitmann/b9schema-reflector-golang/lib/enum/threeflag"
+	"github.com/gitmann/b9schema-reflector-golang/lib/types"
 	"strings"
 )
 
